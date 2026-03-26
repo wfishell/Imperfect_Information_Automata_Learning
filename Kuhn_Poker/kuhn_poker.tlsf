@@ -1,0 +1,199 @@
+INFO {
+  TITLE:       "Kuhn Poker Arbiter"
+  DESCRIPTION: "Reactive arbiter for Kuhn Poker. 3-card deck (J<Q<K).
+                Ante 1 chip each. Min bet 1, max bet 2.
+                Mealy: outputs at step t depend on inputs at step t.
+                Winner is output on the same step as the terminal action."
+  SEMANTICS:   Mealy
+  TARGET:      Mealy
+}
+
+
+MAIN {
+
+  INPUTS {
+    c1lo; c1hi;    // P1 card
+    c2lo; c2hi;    // P2 card
+    a0; a1; a2;    // action bits this step
+    deal;          // phase signals (one-hot)
+    p1;
+    p2;
+    p1b;
+    p2b;
+  }
+
+  OUTPUTS {
+    win1;
+    win2;
+  }
+
+  ASSUMPTIONS {
+
+
+    G (( deal && !p1 && !p2 && !p1b && !p2b) ||
+       (!deal &&  p1 && !p2 && !p1b && !p2b) ||
+       (!deal && !p1 &&  p2 && !p1b && !p2b) ||
+       (!deal && !p1 && !p2 &&  p1b && !p2b) ||
+       (!deal && !p1 && !p2 && !p1b &&  p2b));
+
+    deal;
+    G (deal -> X p1);
+    G (p1 -> X p2);
+
+    G ((p2 && !a2 && !a1 && a0) -> X deal);     // P2 check (terminal) -> new deal
+    G ((p2 && a2 && !a1 && !a0) -> X deal);     // P2 call (terminal) -> new deal
+    G ((p2 && a2 && !a1 && a0) -> X deal);      // P2 fold (terminal) -> new deal
+    G ((p2 && !a2 && a1) -> X p1b);             // P2 bet1/bet2 (non-terminal) -> p1b
+
+    G ((p1b && a2 && !a1 && !a0) -> X deal);    // P1b call (terminal) -> new deal
+    G ((p1b && a2 && !a1 && a0) -> X deal);     // P1b fold (terminal) -> new deal
+    G ((p1b && !a2 && a1 && a0) -> X p2b);      // P1b raise (non-terminal) -> p2b
+
+    G (p2b -> X deal);
+
+    G F deal;
+
+
+    G (deal -> !(c1lo && c1hi));
+    G (deal -> !(c2lo && c2hi));
+    G (deal -> !((c1lo <-> c2lo) && (c1hi <-> c2hi)));
+
+
+    G (!deal -> (
+        (c1lo <-> X c1lo) && (c1hi <-> X c1hi) &&
+        (c2lo <-> X c2lo) && (c2hi <-> X c2hi)));
+
+    G (p1 -> ((c1lo <-> X c1lo) && (c1hi <-> X c1hi) &&
+              (c2lo <-> X c2lo) && (c2hi <-> X c2hi)));
+
+    G (deal -> ((c1lo <-> X c1lo) && (c1hi <-> X c1hi) &&
+                (c2lo <-> X c2lo) && (c2hi <-> X c2hi)));
+
+    G ((p2 && !a2 && a1) ->
+       ((c1lo <-> X c1lo) && (c1hi <-> X c1hi) &&
+        (c2lo <-> X c2lo) && (c2hi <-> X c2hi)));
+
+    G ((p1b && !a2 && a1 && a0) ->
+       ((c1lo <-> X c1lo) && (c1hi <-> X c1hi) &&
+        (c2lo <-> X c2lo) && (c2hi <-> X c2hi)));
+
+    G (deal -> (!a0 && !a1 && !a2));
+
+    G (p1 -> ((!a2 && !a1 && a0) || (!a2 && a1 && !a0) || (!a2 && a1 && a0)));
+
+    G (p2 -> ((!a2 && !a1 && a0) || (!a2 && a1 && !a0) || (!a2 && a1 && a0) ||
+              (a2 && !a1 && !a0) || (a2 && !a1 && a0)));
+
+    G (p1b -> ((a2 && !a1 && !a0) || (a2 && !a1 && a0) || (!a2 && a1 && a0)));
+
+    G (p2b -> ((a2 && !a1 && !a0) || (a2 && !a1 && a0)));
+  }
+
+  GUARANTEES {
+
+
+    G (deal -> (!win1 && !win2));
+    G (p1 -> (!win1 && !win2));
+
+    G ((p2 && !a2 && a1) -> (!win1 && !win2));
+
+    // P1b with raise (non-terminal): no winner
+    G ((p1b && !a2 && a1 && a0) -> (!win1 && !win2));
+
+
+    G ((p2 && ((!a2 && !a1 && a0) || (a2 && !a1 && !a0) || (a2 && !a1 && a0)))
+       -> ((win1 && !win2) || (!win1 && win2)));
+
+    // Terminal p1b (call/fold)
+    G ((p1b && ((a2 && !a1 && !a0) || (a2 && !a1 && a0)))
+       -> ((win1 && !win2) || (!win1 && win2)));
+
+    // Terminal p2b (always terminal)
+    G (p2b -> ((win1 && !win2) || (!win1 && win2)));
+
+
+    // P2 folds => P1 wins (same step)
+    G ((p2 && a2 && !a1 && a0) -> (win1 && !win2));
+
+    // P1b folds => P2 wins (same step)
+    G ((p1b && a2 && !a1 && a0) -> (!win1 && win2));
+
+    // P2b folds => P1 wins (same step)
+    G ((p2b && a2 && !a1 && a0) -> (win1 && !win2));
+
+    G ((p2 && !a2 && !a1 && a0 &&
+        (( c1hi && !c1lo && !c2hi &&  c2lo) ||
+         ( c1hi && !c1lo && !c2hi && !c2lo) ||
+         (!c1hi &&  c1lo && !c2hi && !c2lo)))
+       -> (win1 && !win2));
+
+    G ((p2 && !a2 && !a1 && a0 &&
+        (( c2hi && !c2lo && !c1hi &&  c1lo) ||
+         ( c2hi && !c2lo && !c1hi && !c1lo) ||
+         (!c2hi &&  c2lo && !c1hi && !c1lo)))
+       -> (!win1 && win2));
+
+    G ((p2 && a2 && !a1 && !a0 &&
+        (( c1hi && !c1lo && !c2hi &&  c2lo) ||
+         ( c1hi && !c1lo && !c2hi && !c2lo) ||
+         (!c1hi &&  c1lo && !c2hi && !c2lo)))
+       -> (win1 && !win2));
+
+    G ((p2 && a2 && !a1 && !a0 &&
+        (( c2hi && !c2lo && !c1hi &&  c1lo) ||
+         ( c2hi && !c2lo && !c1hi && !c1lo) ||
+         (!c2hi &&  c2lo && !c1hi && !c1lo)))
+       -> (!win1 && win2));
+
+    G ((p1b && a2 && !a1 && !a0 &&
+        (( c1hi && !c1lo && !c2hi &&  c2lo) ||
+         ( c1hi && !c1lo && !c2hi && !c2lo) ||
+         (!c1hi &&  c1lo && !c2hi && !c2lo)))
+       -> (win1 && !win2));
+
+    G ((p1b && a2 && !a1 && !a0 &&
+        (( c2hi && !c2lo && !c1hi &&  c1lo) ||
+         ( c2hi && !c2lo && !c1hi && !c1lo) ||
+         (!c2hi &&  c2lo && !c1hi && !c1lo)))
+       -> (!win1 && win2));
+
+    // --- P2b:call showdown ---
+    G ((p2b && a2 && !a1 && !a0 &&
+        (( c1hi && !c1lo && !c2hi &&  c2lo) ||
+         ( c1hi && !c1lo && !c2hi && !c2lo) ||
+         (!c1hi &&  c1lo && !c2hi && !c2lo)))
+       -> (win1 && !win2));
+
+    G ((p2b && a2 && !a1 && !a0 &&
+        (( c2hi && !c2lo && !c1hi &&  c1lo) ||
+         ( c2hi && !c2lo && !c1hi && !c1lo) ||
+         (!c2hi &&  c2lo && !c1hi && !c1lo)))
+       -> (!win1 && win2));
+
+  //Just ensures someone wins 
+  G (((p2 && ((!a2 && !a1 && a0) || (a2 && !a1 && !a0) || (a2 && !a1 && a0))) ||
+     (p1b && ((a2 && !a1 && !a0) || (a2 && !a1 && a0))) ||
+     p2b)
+    -> ((win1 && !win2) || (!win1 && win2)));
+  }
+}
+
+
+//Player 1 hand + actions, Player 2 hand + actions inputs
+// Win for player 1 or Win for player 2
+// -> 
+//Reward system which can take history of Player 1 hand + actions, Player 2 hand + actions inputs; Win1 or Win 2....
+// This is -2...+2. Arbitrary range.
+// Above is extraction for reward system
+//Below is learning of a deterministic policy of how to play the game for player 2.
+//What we want is Player 1 input actions given an unknown card,other input is our card.
+//Reactive system for rules for player 2 is non deterministic
+//EX. player 1 raises, king -> (raise again, fold, match)
+
+//A modification of L*
+//in L* you need a deterministic System under learning (SUL) AKA oracle.
+// Provide a random input for via random walk 
+//EX Player raises, Queen; -> {(raise again, fold, match)}
+// There exists three possible traces Player 1 raises, Queen->raise : Player 1 raises, Queen->Fold :Player 1 raises, Queen-> Match.
+
+//Player 1 raises, Queen->raise.....
