@@ -34,6 +34,7 @@ sys.path.insert(0, _HERE)
 
 from dot_trace_generator import load_dot
 
+
 # ---------------------------------------------------------------------------
 # API key
 # ---------------------------------------------------------------------------
@@ -41,6 +42,7 @@ def _load_api_key() -> str:
     key_path = os.path.join(_HERE, ".env", "api_key")
     with open(key_path) as f:
         return f.read().strip()
+
 
 # ---------------------------------------------------------------------------
 # LLM prompt context
@@ -70,8 +72,8 @@ class LLMKuhnPokerTeacher:
     as a cheap oracle before falling back to the LLM.
     """
 
-    P2_WINS  =  1
-    IN_PROG  =  0
+    P2_WINS = 1
+    IN_PROG = 0
     P2_LOSES = -1
 
     def __init__(
@@ -82,11 +84,11 @@ class LLMKuhnPokerTeacher:
         model: str = "claude-haiku-4-5-20251001",
     ):
         raw = load_dot(dot_file)
-        self.machine         = self._prepare_machine(raw)
-        self.hoa_file        = hoa_file
+        self.machine = self._prepare_machine(raw)
+        self.hoa_file = hoa_file
         self.seq_sample_size = seq_sample_size
-        self.model           = model
-        self.client          = anthropic.Anthropic(api_key=_load_api_key())
+        self.model = model
+        self.client = anthropic.Anthropic(api_key=_load_api_key())
 
         # Build sigma_I from all transitions (no full hand enumeration needed)
         self.sigma_I = self._build_sigma_I()
@@ -99,9 +101,9 @@ class LLMKuhnPokerTeacher:
         self._student = None
 
         # Counters for efficiency analysis
-        self._llm_calls    = 0
+        self._llm_calls = 0
         self._student_hits = 0
-        self._cache_hits   = 0
+        self._cache_hits = 0
 
         print(f"[teacher] Ready. sigma_I has {len(self.sigma_I)} symbols.")
 
@@ -152,37 +154,51 @@ class LLMKuhnPokerTeacher:
     # -----------------------------------------------------------------------
 
     def _card(self, aps: frozenset, hi: str, lo: str) -> str:
-        if hi in aps and lo not in aps:     return "King"
-        if hi not in aps and lo in aps:     return "Queen"
+        if hi in aps and lo not in aps:
+            return "King"
+        if hi not in aps and lo in aps:
+            return "Queen"
         return "Jack"
 
     def _action(self, aps: frozenset) -> str:
         a2, a1, a0 = "a2" in aps, "a1" in aps, "a0" in aps
-        if not a2 and not a1 and a0:    return "check"
-        if not a2 and a1 and not a0:    return "bet"
-        if not a2 and a1 and a0:        return "raise"
-        if a2 and not a1 and not a0:    return "call"
-        if a2 and not a1 and a0:        return "fold"
+        if not a2 and not a1 and a0:
+            return "check"
+        if not a2 and a1 and not a0:
+            return "bet"
+        if not a2 and a1 and a0:
+            return "raise"
+        if a2 and not a1 and not a0:
+            return "call"
+        if a2 and not a1 and a0:
+            return "fold"
         return "none"
 
     def _outcome_tag(self, aps: frozenset) -> str:
-        if "win1" in aps:   return "W1"
-        if "win2" in aps:   return "W2"
+        if "win1" in aps:
+            return "W1"
+        if "win2" in aps:
+            return "W2"
         return "none"
 
     def _to_symbol(self, inp_str: str, out_str: str) -> str:
         inp = self._true_aps(inp_str)
         out = self._true_aps(out_str)
         aps = inp | out
-        c1  = self._card(aps, "c1hi", "c1lo")
-        c2  = self._card(aps, "c2hi", "c2lo")
+        c1 = self._card(aps, "c1hi", "c1lo")
+        c2 = self._card(aps, "c2hi", "c2lo")
         act = self._action(inp)
         res = self._outcome_tag(out)
-        if "deal" in inp:   return f"DEAL_{c1}_{c2}"
-        if "p1"   in inp:   return f"P1_{c1}_{c2}_{act}"
-        if "p2"   in inp:   return f"P2_{c1}_{c2}_{act}_{res}"
-        if "p1b"  in inp:   return f"P1B_{c1}_{c2}_{act}_{res}"
-        if "p2b"  in inp:   return f"P2B_{c1}_{c2}_{act}_{res}"
+        if "deal" in inp:
+            return f"DEAL_{c1}_{c2}"
+        if "p1" in inp:
+            return f"P1_{c1}_{c2}_{act}"
+        if "p2" in inp:
+            return f"P2_{c1}_{c2}_{act}_{res}"
+        if "p1b" in inp:
+            return f"P1B_{c1}_{c2}_{act}_{res}"
+        if "p2b" in inp:
+            return f"P2B_{c1}_{c2}_{act}_{res}"
         return "UNKNOWN"
 
     # -----------------------------------------------------------------------
@@ -275,14 +291,18 @@ class LLMKuhnPokerTeacher:
             except Exception as e:
                 if attempt == 3:
                     raise
-                wait = 2 ** attempt
+                wait = 2**attempt
                 print(f"[teacher] LLM error ({e}), retrying in {wait}s...")
-                import time; time.sleep(wait)
+                import time
+
+                time.sleep(wait)
 
         raw = resp.content[0].text.strip().upper()
         # Be conservative: only trust clean single-token answers
-        if raw.startswith("A") and "B" not in raw:   return  1
-        if raw.startswith("B") and "A" not in raw:   return -1
+        if raw.startswith("A") and "B" not in raw:
+            return 1
+        if raw.startswith("B") and "A" not in raw:
+            return -1
         return 0
 
     # -----------------------------------------------------------------------
@@ -309,17 +329,20 @@ class LLMKuhnPokerTeacher:
         v2 = self._student_output(s2)
         if v1 is not None and v2 is not None:
             self._student_hits += 1
-            if   v1 > v2:  pref =  1
-            elif v1 < v2:  pref = -1
-            else:          pref =  0
-            self._pref_cache[key]        = pref
-            self._pref_cache[(s2, s1)]   = -pref
+            if v1 > v2:
+                pref = 1
+            elif v1 < v2:
+                pref = -1
+            else:
+                pref = 0
+            self._pref_cache[key] = pref
+            self._pref_cache[(s2, s1)] = -pref
             return pref
 
         # Tier 3: LLM
         self._llm_calls += 1
         pref = self._llm_compare(s1, s2)
-        self._pref_cache[key]      = pref
+        self._pref_cache[key] = pref
         self._pref_cache[(s2, s1)] = -pref
         return pref
 
@@ -332,16 +355,16 @@ class LLMKuhnPokerTeacher:
         Generate complete hands via random walks on the machine.
         A hand is complete when a transition returns to the initial state.
         """
-        initial  = self.machine["initial"]
-        trans    = self.machine["transitions"]
-        results  = []
+        initial = self.machine["initial"]
+        trans = self.machine["transitions"]
+        results = []
         attempts = 0
 
         while len(results) < quantity and attempts < quantity * 20:
             attempts += 1
             state = initial
-            path  = []
-            for _ in range(10):                    # depth limit
+            path = []
+            for _ in range(10):  # depth limit
                 choices = list(trans.get(state, {}).items())
                 if not choices:
                     break
@@ -366,8 +389,10 @@ class LLMKuhnPokerTeacher:
 
     def _eval_outcome(self, seq: tuple) -> int:
         for sym in reversed(seq):
-            if sym.endswith("_W2"):     return self.P2_WINS
-            if sym.endswith("_W1"):     return self.P2_LOSES
+            if sym.endswith("_W2"):
+                return self.P2_WINS
+            if sym.endswith("_W1"):
+                return self.P2_LOSES
         return self.IN_PROG
 
     def _run_hypothesis(self, seq, init_state, delta, output_fnc) -> int:
@@ -376,7 +401,9 @@ class LLMKuhnPokerTeacher:
             q = delta.get(q, {}).get(sym, q)
         return output_fnc.get(q, self.IN_PROG)
 
-    def equivalence_query(self, states, sigma_I, sigma_O, init_state, delta, output_fnc):
+    def equivalence_query(
+        self, states, sigma_I, sigma_O, init_state, delta, output_fnc
+    ):
         """
         Sample-based equivalence check.
         Returns (True, None) or (False, (counterexample, correct_value)).
@@ -384,7 +411,7 @@ class LLMKuhnPokerTeacher:
         seqs = self.sample_sequences(self.seq_sample_size)
         for seq in seqs:
             teacher_val = self._eval_outcome(seq)
-            hyp_val     = self._run_hypothesis(seq, init_state, delta, output_fnc)
+            hyp_val = self._run_hypothesis(seq, init_state, delta, output_fnc)
             if teacher_val != hyp_val:
                 return False, (seq, teacher_val)
         return True, None
@@ -396,9 +423,9 @@ class LLMKuhnPokerTeacher:
 if __name__ == "__main__":
     print("Loading teacher (lazy — no upfront LLM calls)...")
     teacher = LLMKuhnPokerTeacher(
-        dot_file        = "Kuhn_Poker/kuhn_poker.dot",
-        hoa_file        = "Kuhn_Poker/Kuhn_Poker.hoa",
-        seq_sample_size = 200,
+        dot_file="Kuhn_Poker/kuhn_poker.dot",
+        hoa_file="Kuhn_Poker/Kuhn_Poker.hoa",
+        seq_sample_size=200,
     )
 
     print(f"\nsigma_I : {len(teacher.sigma_I)} symbols")

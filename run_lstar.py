@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 import sys
+
 sys.path.insert(0, "REMAP/remap")
 
 from lstar import symbolic_lstar
 from deterministic_teacher import DeterministicKuhnPokerTeacher
 
 teacher = DeterministicKuhnPokerTeacher(
-    dot_file        = "Kuhn_Poker/kuhn_poker.dot",
-    seq_sample_size = 200,
+    dot_file="Kuhn_Poker/kuhn_poker.dot",
+    seq_sample_size=200,
 )
 
 print(f"sigma_I: {len(teacher.sigma_I)} symbols")
@@ -18,7 +19,18 @@ hypothesis, data = symbolic_lstar(teacher.sigma_I, teacher.sigma_O, teacher)
 
 # Unpack
 states, sigma_I, sigma_O, init_state, delta, output_fnc = hypothesis
-num_pref, num_ineq, num_seq, num_ecs, num_vars, up_shape, lo_shape, num_eq, cex_lens, events = data
+(
+    num_pref,
+    num_ineq,
+    num_seq,
+    num_ecs,
+    num_vars,
+    up_shape,
+    lo_shape,
+    num_eq,
+    cex_lens,
+    events,
+) = data
 
 print("\n=== Results ===")
 print(f"States         : {len(states)}")

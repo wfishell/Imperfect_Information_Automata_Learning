@@ -11,43 +11,60 @@ from itertools import permutations, product
 J, Q, K = 0, 1, 2
 CARD_NAMES = {0: "J", 1: "Q", 2: "K"}
 
-NOOP  = (0, 0, 0)
+NOOP = (0, 0, 0)
 CHECK = (1, 0, 0)
-BET1  = (0, 1, 0)
-BET2  = (1, 1, 0)
-CALL  = (0, 0, 1)
-FOLD  = (1, 0, 1)
+BET1 = (0, 1, 0)
+BET2 = (1, 1, 0)
+CALL = (0, 0, 1)
+FOLD = (1, 0, 1)
 ACTION_NAMES = {
-    NOOP: "noop", CHECK: "check", BET1: "bet1",
-    BET2: "bet2", CALL: "call", FOLD: "fold"
+    NOOP: "noop",
+    CHECK: "check",
+    BET1: "bet1",
+    BET2: "bet2",
+    CALL: "call",
+    FOLD: "fold",
 }
 
 PH_DEAL = "deal"
-PH_P1   = "p1"
-PH_P2   = "p2"
-PH_P1B  = "p1b"
-PH_P2B  = "p2b"
-PH_END  = "end"
+PH_P1 = "p1"
+PH_P2 = "p2"
+PH_P1B = "p1b"
+PH_P2B = "p2b"
+PH_END = "end"
 
-ALL_INPUT_SIGNALS = ["c1lo", "c1hi", "c2lo", "c2hi", "a0", "a1", "a2",
-                     "deal", "p1", "p2", "p1b", "p2b", "end"]
+ALL_INPUT_SIGNALS = [
+    "c1lo",
+    "c1hi",
+    "c2lo",
+    "c2hi",
+    "a0",
+    "a1",
+    "a2",
+    "deal",
+    "p1",
+    "p2",
+    "p1b",
+    "p2b",
+    "end",
+]
 OUTPUT_SIGNAL_NAMES = {"win1", "win2"}
 
 PHASE_BITS_NO_END = {
     PH_DEAL: {"deal": 1, "p1": 0, "p2": 0, "p1b": 0, "p2b": 0},
-    PH_P1:   {"deal": 0, "p1": 1, "p2": 0, "p1b": 0, "p2b": 0},
-    PH_P2:   {"deal": 0, "p1": 0, "p2": 1, "p1b": 0, "p2b": 0},
-    PH_P1B:  {"deal": 0, "p1": 0, "p2": 0, "p1b": 1, "p2b": 0},
-    PH_P2B:  {"deal": 0, "p1": 0, "p2": 0, "p1b": 0, "p2b": 1},
+    PH_P1: {"deal": 0, "p1": 1, "p2": 0, "p1b": 0, "p2b": 0},
+    PH_P2: {"deal": 0, "p1": 0, "p2": 1, "p1b": 0, "p2b": 0},
+    PH_P1B: {"deal": 0, "p1": 0, "p2": 0, "p1b": 1, "p2b": 0},
+    PH_P2B: {"deal": 0, "p1": 0, "p2": 0, "p1b": 0, "p2b": 1},
 }
 
 PHASE_BITS_WITH_END = {
     PH_DEAL: {"deal": 1, "p1": 0, "p2": 0, "p1b": 0, "p2b": 0, "end": 0},
-    PH_P1:   {"deal": 0, "p1": 1, "p2": 0, "p1b": 0, "p2b": 0, "end": 0},
-    PH_P2:   {"deal": 0, "p1": 0, "p2": 1, "p1b": 0, "p2b": 0, "end": 0},
-    PH_P1B:  {"deal": 0, "p1": 0, "p2": 0, "p1b": 1, "p2b": 0, "end": 0},
-    PH_P2B:  {"deal": 0, "p1": 0, "p2": 0, "p1b": 0, "p2b": 1, "end": 0},
-    PH_END:  {"deal": 0, "p1": 0, "p2": 0, "p1b": 0, "p2b": 0, "end": 1},
+    PH_P1: {"deal": 0, "p1": 1, "p2": 0, "p1b": 0, "p2b": 0, "end": 0},
+    PH_P2: {"deal": 0, "p1": 0, "p2": 1, "p1b": 0, "p2b": 0, "end": 0},
+    PH_P1B: {"deal": 0, "p1": 0, "p2": 0, "p1b": 1, "p2b": 0, "end": 0},
+    PH_P2B: {"deal": 0, "p1": 0, "p2": 0, "p1b": 0, "p2b": 1, "end": 0},
+    PH_END: {"deal": 0, "p1": 0, "p2": 0, "p1b": 0, "p2b": 0, "end": 1},
 }
 
 
@@ -83,10 +100,12 @@ def make_step(c1, c2, action, phase, has_end):
 # Trace Generation
 # ============================================================
 
+
 def generate_traces(has_end_phase=False):
     traces = []
     for c1, c2 in permutations([J, Q, K], 2):
         for p1a in [CHECK, BET1, BET2]:
+
             def build(after_p1):
                 steps = []
                 steps.append((make_step(c1, c2, NOOP, PH_DEAL, has_end_phase), 0, 0))
@@ -97,9 +116,13 @@ def generate_traces(has_end_phase=False):
                     else:
                         if is_terminal_no_end(phase, action):
                             w1, w2 = expected_winner(c1, c2, phase, action)
-                            steps.append((make_step(c1, c2, action, phase, False), w1, w2))
+                            steps.append(
+                                (make_step(c1, c2, action, phase, False), w1, w2)
+                            )
                         else:
-                            steps.append((make_step(c1, c2, action, phase, False), 0, 0))
+                            steps.append(
+                                (make_step(c1, c2, action, phase, False), 0, 0)
+                            )
                 if has_end_phase:
                     tp, ta = after_p1[-1]
                     w1, w2 = expected_winner(c1, c2, tp, ta)
@@ -118,7 +141,15 @@ def generate_traces(has_end_phase=False):
                         for p1ba in [CALL, FOLD, BET2]:
                             if p1ba == BET2:
                                 for p2ba in [CALL, FOLD]:
-                                    traces.append(build([(PH_P2, BET1), (PH_P1B, BET2), (PH_P2B, p2ba)]))
+                                    traces.append(
+                                        build(
+                                            [
+                                                (PH_P2, BET1),
+                                                (PH_P1B, BET2),
+                                                (PH_P2B, p2ba),
+                                            ]
+                                        )
+                                    )
                             else:
                                 traces.append(build([(PH_P2, BET1), (PH_P1B, p1ba)]))
                     elif p2a == BET2:
@@ -141,10 +172,11 @@ def generate_traces(has_end_phase=False):
 # HOA Parser
 # ============================================================
 
+
 def parse_hoa(filename):
-    with open(filename, 'r') as f:
+    with open(filename, "r") as f:
         content = f.read()
-    lines = content.strip().split('\n')
+    lines = content.strip().split("\n")
     num_states = None
     start_state = None
     ap_list = []
@@ -155,35 +187,35 @@ def parse_hoa(filename):
 
     for line in lines:
         line = line.strip()
-        if line == '--BODY--':
+        if line == "--BODY--":
             in_body = True
             continue
-        if line == '--END--':
+        if line == "--END--":
             break
         if not in_body:
-            if line.startswith('States:'):
-                num_states = int(line.split(':')[1].strip())
-            elif line.startswith('Start:'):
-                start_state = int(line.split(':')[1].strip())
-            elif line.startswith('AP:'):
+            if line.startswith("States:"):
+                num_states = int(line.split(":")[1].strip())
+            elif line.startswith("Start:"):
+                start_state = int(line.split(":")[1].strip())
+            elif line.startswith("AP:"):
                 parts = line.split('"')
                 ap_list = [parts[i] for i in range(1, len(parts), 2)]
-            elif line.startswith('controllable-ap:'):
-                ctrl = line.split(':')[1].strip()
+            elif line.startswith("controllable-ap:"):
+                ctrl = line.split(":")[1].strip()
                 if ctrl:
                     controllable_aps = [int(x) for x in ctrl.split()]
         else:
-            if line.startswith('State:'):
+            if line.startswith("State:"):
                 parts = line.split()
                 current_state = int(parts[1])
                 states[current_state] = []
-            elif line.startswith('[') and current_state is not None:
-                bracket_end = line.index(']')
+            elif line.startswith("[") and current_state is not None:
+                bracket_end = line.index("]")
                 guard_str = line[1:bracket_end]
-                rest = line[bracket_end+1:].strip()
-                dest_match = re.match(r'(\d+)', rest)
+                rest = line[bracket_end + 1 :].strip()
+                dest_match = re.match(r"(\d+)", rest)
                 dest = int(dest_match.group(1)) if dest_match else 0
-                states[current_state].append({'guard': guard_str, 'dest': dest})
+                states[current_state].append({"guard": guard_str, "dest": dest})
 
     return num_states, start_state, ap_list, controllable_aps, states
 
@@ -192,75 +224,103 @@ def parse_hoa(filename):
 # Guard Evaluator
 # ============================================================
 
+
 def tokenize(s):
     tokens = []
     i = 0
     while i < len(s):
         c = s[i]
-        if c in ' \t':
+        if c in " \t":
             i += 1
-        elif c == '(':
-            tokens.append(('(', None)); i += 1
-        elif c == ')':
-            tokens.append((')', None)); i += 1
-        elif c == '&':
-            tokens.append(('&', None)); i += 1
-        elif c == '|':
-            tokens.append(('|', None)); i += 1
-        elif c == '!':
-            tokens.append(('!', None)); i += 1
-        elif c == 't' and (i+1 >= len(s) or not s[i+1].isalnum()):
-            tokens.append(('V', True)); i += 1
-        elif c == 'f' and (i+1 >= len(s) or not s[i+1].isalnum()):
-            tokens.append(('V', False)); i += 1
+        elif c == "(":
+            tokens.append(("(", None))
+            i += 1
+        elif c == ")":
+            tokens.append((")", None))
+            i += 1
+        elif c == "&":
+            tokens.append(("&", None))
+            i += 1
+        elif c == "|":
+            tokens.append(("|", None))
+            i += 1
+        elif c == "!":
+            tokens.append(("!", None))
+            i += 1
+        elif c == "t" and (i + 1 >= len(s) or not s[i + 1].isalnum()):
+            tokens.append(("V", True))
+            i += 1
+        elif c == "f" and (i + 1 >= len(s) or not s[i + 1].isalnum()):
+            tokens.append(("V", False))
+            i += 1
         elif c.isdigit():
             j = i
             while j < len(s) and s[j].isdigit():
                 j += 1
-            tokens.append(('N', int(s[i:j]))); i = j
+            tokens.append(("N", int(s[i:j])))
+            i = j
         else:
             i += 1
     return tokens
 
+
 def eval_guard(guard_str, vals):
     s = guard_str.strip()
-    if s == 't': return True
-    if s == 'f': return False
+    if s == "t":
+        return True
+    if s == "f":
+        return False
     tokens = tokenize(s)
     r, _ = _p_or(tokens, 0, vals)
     return r
 
+
 def _p_or(t, p, v):
     l, p = _p_and(t, p, v)
-    while p < len(t) and t[p][0] == '|':
-        p += 1; r, p = _p_and(t, p, v); l = l or r
+    while p < len(t) and t[p][0] == "|":
+        p += 1
+        r, p = _p_and(t, p, v)
+        l = l or r
     return l, p
+
 
 def _p_and(t, p, v):
     l, p = _p_not(t, p, v)
-    while p < len(t) and t[p][0] == '&':
-        p += 1; r, p = _p_not(t, p, v); l = l and r
+    while p < len(t) and t[p][0] == "&":
+        p += 1
+        r, p = _p_not(t, p, v)
+        l = l and r
     return l, p
 
+
 def _p_not(t, p, v):
-    if p < len(t) and t[p][0] == '!':
-        p += 1; r, p = _p_atom(t, p, v); return not r, p
+    if p < len(t) and t[p][0] == "!":
+        p += 1
+        r, p = _p_atom(t, p, v)
+        return not r, p
     return _p_atom(t, p, v)
 
+
 def _p_atom(t, p, v):
-    if p >= len(t): return False, p
-    if t[p][0] == '(':
-        p += 1; r, p = _p_or(t, p, v)
-        if p < len(t) and t[p][0] == ')': p += 1
+    if p >= len(t):
+        return False, p
+    if t[p][0] == "(":
+        p += 1
+        r, p = _p_or(t, p, v)
+        if p < len(t) and t[p][0] == ")":
+            p += 1
         return r, p
-    if t[p][0] == 'V': return t[p][1], p+1
-    if t[p][0] == 'N': return v[t[p][1]], p+1
-    return False, p+1
+    if t[p][0] == "V":
+        return t[p][1], p + 1
+    if t[p][0] == "N":
+        return v[t[p][1]], p + 1
+    return False, p + 1
 
 
 # ============================================================
 # HOA Simulator
 # ============================================================
+
 
 def simulate_hoa(hoa_file, traces):
     num_states, start_state, ap_list, controllable_aps, states = parse_hoa(hoa_file)
@@ -297,7 +357,9 @@ def simulate_hoa(hoa_file, traces):
             needed_input_sigs.update(signals.keys())
     missing = needed_input_sigs - set(ap_list) - OUTPUT_SIGNAL_NAMES
     if missing:
-        print(f"  WARNING: These input signals from traces are NOT in HOA APs: {missing}")
+        print(
+            f"  WARNING: These input signals from traces are NOT in HOA APs: {missing}"
+        )
         print(f"  (They will default to False/0)")
     extra_aps = set(ap_list) - needed_input_sigs - OUTPUT_SIGNAL_NAMES
     if extra_aps:
@@ -331,19 +393,19 @@ def simulate_hoa(hoa_file, traces):
                     test_vals[ap_idx] = bool((out_combo >> bit_idx) & 1)
 
                 for trans in states.get(state, []):
-                    if eval_guard(trans['guard'], test_vals):
+                    if eval_guard(trans["guard"], test_vals):
                         w1_idx = name_to_ap.get("win1")
                         w2_idx = name_to_ap.get("win2")
                         got_w1 = int(test_vals[w1_idx]) if w1_idx is not None else 0
                         got_w2 = int(test_vals[w2_idx]) if w2_idx is not None else 0
 
                         if got_w1 == exp_w1 and got_w2 == exp_w2:
-                            state = trans['dest']
+                            state = trans["dest"]
                             found = True
                             break
                         else:
                             if actual_outputs is None:
-                                actual_outputs = (got_w1, got_w2, trans['dest'])
+                                actual_outputs = (got_w1, got_w2, trans["dest"])
 
                 if found:
                     break
@@ -351,16 +413,20 @@ def simulate_hoa(hoa_file, traces):
             if not found:
                 if actual_outputs:
                     aw1, aw2, nxt = actual_outputs
-                    detail = (f"  FAIL trace {trace_id} step {step_idx}: {desc}\n"
-                              f"    State={state} -> {nxt} | "
-                              f"expected w1={exp_w1} w2={exp_w2} | "
-                              f"actual w1={aw1} w2={aw2}")
+                    detail = (
+                        f"  FAIL trace {trace_id} step {step_idx}: {desc}\n"
+                        f"    State={state} -> {nxt} | "
+                        f"expected w1={exp_w1} w2={exp_w2} | "
+                        f"actual w1={aw1} w2={aw2}"
+                    )
                     state = nxt  # advance to continue checking
                 else:
-                    detail = (f"  FAIL trace {trace_id} step {step_idx}: {desc}\n"
-                              f"    State={state} | "
-                              f"expected w1={exp_w1} w2={exp_w2} | "
-                              f"NO MATCHING TRANSITION FOUND")
+                    detail = (
+                        f"  FAIL trace {trace_id} step {step_idx}: {desc}\n"
+                        f"    State={state} | "
+                        f"expected w1={exp_w1} w2={exp_w2} | "
+                        f"NO MATCHING TRANSITION FOUND"
+                    )
                 fail_details.append(detail)
                 trace_ok = False
                 break
@@ -393,12 +459,17 @@ def simulate_hoa(hoa_file, traces):
 # CSV / JSON / Traces
 # ============================================================
 
+
 def output_csv(traces, has_end):
     sigs = [s for s in ALL_INPUT_SIGNALS if has_end or s != "end"]
     print(",".join(sigs + ["expected_win1", "expected_win2", "trace_id", "step"]))
     for tid, (_, steps) in enumerate(traces):
         for sid, (signals, w1, w2) in enumerate(steps):
-            print(",".join(str(signals.get(s, 0)) for s in sigs) + f",{w1},{w2},{tid},{sid}")
+            print(
+                ",".join(str(signals.get(s, 0)) for s in sigs)
+                + f",{w1},{w2},{tid},{sid}"
+            )
+
 
 def output_json(traces):
     out = {"traces": []}
@@ -409,13 +480,24 @@ def output_json(traces):
         out["traces"].append(t)
     print(json.dumps(out, indent=2))
 
+
 def output_traces(traces):
     print(f"{'='*80}\nKUHN POKER — {len(traces)} traces\n{'='*80}\n")
     for tid, (desc, steps) in enumerate(traces):
         print(f"--- Trace {tid}: {desc} ---")
         for sid, (signals, w1, w2) in enumerate(steps):
-            phase = next((p for p in [PH_DEAL,PH_P1,PH_P2,PH_P1B,PH_P2B,PH_END] if signals.get(p,0)==1), "?")
-            act = ACTION_NAMES.get((signals.get("a0",0), signals.get("a1",0), signals.get("a2",0)), "???")
+            phase = next(
+                (
+                    p
+                    for p in [PH_DEAL, PH_P1, PH_P2, PH_P1B, PH_P2B, PH_END]
+                    if signals.get(p, 0) == 1
+                ),
+                "?",
+            )
+            act = ACTION_NAMES.get(
+                (signals.get("a0", 0), signals.get("a1", 0), signals.get("a2", 0)),
+                "???",
+            )
             win = " -> P1 WINS" if w1 else (" -> P2 WINS" if w2 else "")
             print(f"  {sid}: {phase:5s} {act:6s} | w1={w1} w2={w2}{win}")
         print()
@@ -425,20 +507,24 @@ def output_traces(traces):
 # Main
 # ============================================================
 
+
 def main():
     parser = argparse.ArgumentParser(description="Kuhn Poker test harness v2")
     parser.add_argument("--hoa", type=str, help="Test a HOA automaton file")
     parser.add_argument("--csv", action="store_true")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--traces", action="store_true")
-    parser.add_argument("--with-end", action="store_true",
-                        help="Use old spec with 'end' phase")
+    parser.add_argument(
+        "--with-end", action="store_true", help="Use old spec with 'end' phase"
+    )
     args = parser.parse_args()
 
     if args.hoa:
         _, _, ap_list, _, _ = parse_hoa(args.hoa)
         has_end = "end" in ap_list
-        print(f"Auto-detected spec: {'with end phase' if has_end else 'no end phase (Mealy)'}")
+        print(
+            f"Auto-detected spec: {'with end phase' if has_end else 'no end phase (Mealy)'}"
+        )
         traces = generate_traces(has_end_phase=has_end)
         print(f"Generated {len(traces)} test traces")
         simulate_hoa(args.hoa, traces)
@@ -454,6 +540,7 @@ def main():
         print("  python3 test_kuhn.py --csv [--with-end]")
         print("  python3 test_kuhn.py --json [--with-end]")
         print("  python3 test_kuhn.py --traces [--with-end]")
+
 
 if __name__ == "__main__":
     main()

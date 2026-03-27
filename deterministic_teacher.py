@@ -33,42 +33,34 @@ from dot_trace_generator import load_dot
 _STRATEGIC_SCORE: dict = {
     # ---- P1 CHECKED first (P1 showed weakness) ----
     # P2 holds King: betting extracts value from a dominant hand
-    ("King",  "check", "bet"):   5,
-    ("King",  "check", "check"): 3,   # wins anyway, but missed value
-
+    ("King", "check", "bet"): 5,
+    ("King", "check", "check"): 3,  # wins anyway, but missed value
     # P2 holds Queen: checking is safer (beats Jack, loses to King)
     ("Queen", "check", "check"): 3,
-    ("Queen", "check", "bet"):   2,   # thin value / risky bluff
-
+    ("Queen", "check", "bet"): 2,  # thin value / risky bluff
     # P2 holds Jack: bluffing has strategic value after P1 checked
-    ("Jack",  "check", "bet"):   3,   # correct bluff spot
-    ("Jack",  "check", "check"): 1,   # passive; never wins at showdown
-
+    ("Jack", "check", "bet"): 3,  # correct bluff spot
+    ("Jack", "check", "check"): 1,  # passive; never wins at showdown
     # ---- P1 BET first (P1 showed strength) ----
     # P2 holds King: must call — guaranteed to win
-    ("King",  "bet",   "call"):  5,
-    ("King",  "bet",   "fold"):  -5,  # catastrophic: folding the best hand
-
+    ("King", "bet", "call"): 5,
+    ("King", "bet", "fold"): -5,  # catastrophic: folding the best hand
     # P2 holds Queen: fold is correct (P1 range: King + bluff Jack)
-    ("Queen", "bet",   "fold"):  3,
-    ("Queen", "bet",   "call"):  1,   # marginal; can be right vs bluffs
-
+    ("Queen", "bet", "fold"): 3,
+    ("Queen", "bet", "call"): 1,  # marginal; can be right vs bluffs
     # P2 holds Jack: always fold — worst hand
-    ("Jack",  "bet",   "fold"):  3,
-    ("Jack",  "bet",   "call"):  -3,  # calling with worst hand
-
+    ("Jack", "bet", "fold"): 3,
+    ("Jack", "bet", "call"): -3,  # calling with worst hand
     # ---- P2 RE-RAISED (P2B round: P2 responds to P1's raise) ----
     # P2 holds King: always call a re-raise
-    ("King",  "raise", "call"):  4,
-    ("King",  "raise", "fold"):  -4,
-
+    ("King", "raise", "call"): 4,
+    ("King", "raise", "fold"): -4,
     # P2 holds Queen: fold to re-raise (P1 re-raising range is very strong)
-    ("Queen", "raise", "fold"):  3,
-    ("Queen", "raise", "call"):  0,
-
+    ("Queen", "raise", "fold"): 3,
+    ("Queen", "raise", "call"): 0,
     # P2 holds Jack: fold to re-raise
-    ("Jack",  "raise", "fold"):  2,
-    ("Jack",  "raise", "call"):  -3,
+    ("Jack", "raise", "fold"): 2,
+    ("Jack", "raise", "call"): -3,
 }
 
 
@@ -101,7 +93,7 @@ def _strategic_score_for_sequence(seq: tuple) -> int:
         if phase == "P2" and len(parts) >= 4:
             # P2_P1card_P2card_action[_outcome]
             p2_card = parts[2]
-            action  = parts[3]
+            action = parts[3]
             # P1's visible action leading here is "check" (P2 acts after P1 check)
             # or "bet" (P2 acts after P1 bet) — infer from DOT structure:
             # P2 phase always follows P1's first action, which is bet or check.
@@ -111,14 +103,14 @@ def _strategic_score_for_sequence(seq: tuple) -> int:
             if idx > 0:
                 prev = seq[idx - 1].split("_")
                 if len(prev) >= 4:
-                    p1_action = prev[3]   # P1's action: "check" or "bet"
+                    p1_action = prev[3]  # P1's action: "check" or "bet"
             key = (p2_card, p1_action, action)
             score += _STRATEGIC_SCORE.get(key, 0)
 
         elif phase == "P2B" and len(parts) >= 4:
             # P2B_P1card_P2card_action[_outcome]
             p2_card = parts[2]
-            action  = parts[3]
+            action = parts[3]
             # P1B always raises (it's the only P1B action that leads to P2B)
             key = (p2_card, "raise", action)
             score += _STRATEGIC_SCORE.get(key, 0)
@@ -129,6 +121,7 @@ def _strategic_score_for_sequence(seq: tuple) -> int:
 # ---------------------------------------------------------------------------
 # Shared machine helpers (identical to llm_teacher helpers)
 # ---------------------------------------------------------------------------
+
 
 def _split_disjunction(inp: str) -> list:
     inp = inp.strip()
@@ -148,24 +141,33 @@ def _true_aps(clause: str) -> frozenset:
 
 
 def _card(aps, hi, lo):
-    if hi in aps and lo not in aps:   return "King"
-    if hi not in aps and lo in aps:   return "Queen"
+    if hi in aps and lo not in aps:
+        return "King"
+    if hi not in aps and lo in aps:
+        return "Queen"
     return "Jack"
 
 
 def _action(aps):
     a2, a1, a0 = "a2" in aps, "a1" in aps, "a0" in aps
-    if not a2 and not a1 and a0:  return "check"
-    if not a2 and a1 and not a0:  return "bet"
-    if not a2 and a1 and a0:      return "raise"
-    if a2 and not a1 and not a0:  return "call"
-    if a2 and not a1 and a0:      return "fold"
+    if not a2 and not a1 and a0:
+        return "check"
+    if not a2 and a1 and not a0:
+        return "bet"
+    if not a2 and a1 and a0:
+        return "raise"
+    if a2 and not a1 and not a0:
+        return "call"
+    if a2 and not a1 and a0:
+        return "fold"
     return "none"
 
 
 def _outcome_tag(aps):
-    if "win1" in aps: return "W1"
-    if "win2" in aps: return "W2"
+    if "win1" in aps:
+        return "W1"
+    if "win2" in aps:
+        return "W2"
     return "none"
 
 
@@ -173,15 +175,20 @@ def _to_symbol(inp_str: str, out_str: str) -> str:
     inp = _true_aps(inp_str)
     out = _true_aps(out_str)
     aps = inp | out
-    c1  = _card(aps, "c1hi", "c1lo")
-    c2  = _card(aps, "c2hi", "c2lo")
+    c1 = _card(aps, "c1hi", "c1lo")
+    c2 = _card(aps, "c2hi", "c2lo")
     act = _action(inp)
     res = _outcome_tag(out)
-    if "deal" in inp:  return f"DEAL_{c1}_{c2}"
-    if "p1"   in inp:  return f"P1_{c1}_{c2}_{act}"
-    if "p2"   in inp:  return f"P2_{c1}_{c2}_{act}_{res}"
-    if "p1b"  in inp:  return f"P1B_{c1}_{c2}_{act}_{res}"
-    if "p2b"  in inp:  return f"P2B_{c1}_{c2}_{act}_{res}"
+    if "deal" in inp:
+        return f"DEAL_{c1}_{c2}"
+    if "p1" in inp:
+        return f"P1_{c1}_{c2}_{act}"
+    if "p2" in inp:
+        return f"P2_{c1}_{c2}_{act}_{res}"
+    if "p1b" in inp:
+        return f"P1B_{c1}_{c2}_{act}_{res}"
+    if "p2b" in inp:
+        return f"P2B_{c1}_{c2}_{act}_{res}"
     return "UNKNOWN"
 
 
@@ -197,14 +204,14 @@ def _prepare_machine(machine: dict) -> dict:
 
 
 def _enumerate_all_hands(machine: dict) -> list:
-    initial  = machine["initial"]
-    trans    = machine["transitions"]
+    initial = machine["initial"]
+    trans = machine["transitions"]
     complete = []
-    stack    = [(initial, [])]
+    stack = [(initial, [])]
     while stack:
         state, path = stack.pop()
         for inp, (nxt, out) in trans.get(state, {}).items():
-            sym      = _to_symbol(inp, out)
+            sym = _to_symbol(inp, out)
             new_path = path + [sym]
             if nxt == initial:
                 complete.append(tuple(new_path))
@@ -215,14 +222,17 @@ def _enumerate_all_hands(machine: dict) -> list:
 
 def _eval_outcome(seq: tuple, P2_WINS=1, IN_PROG=0, P2_LOSES=-1) -> int:
     for sym in reversed(seq):
-        if sym.endswith("_W2"): return P2_WINS
-        if sym.endswith("_W1"): return P2_LOSES
+        if sym.endswith("_W2"):
+            return P2_WINS
+        if sym.endswith("_W1"):
+            return P2_LOSES
     return IN_PROG
 
 
 # ---------------------------------------------------------------------------
 # Ground-truth reward machine
 # ---------------------------------------------------------------------------
+
 
 def build_kuhn_reward_machine(sigma_I: tuple) -> dict:
     """
@@ -253,12 +263,12 @@ def build_kuhn_reward_machine(sigma_I: tuple) -> dict:
                 delta[state][sym] = state if state != 0 else 0
 
     return {
-        "states":      {0, 1, -1},
-        "initial":     0,
-        "sigma_I":     sigma_I,
-        "sigma_O":     (-1, 0, 1),
-        "delta":       delta,
-        "output":      {0: 0, 1: 1, -1: -1},
+        "states": {0, 1, -1},
+        "initial": 0,
+        "sigma_I": sigma_I,
+        "sigma_O": (-1, 0, 1),
+        "delta": delta,
+        "output": {0: 0, 1: 1, -1: -1},
         "state_names": {0: "IN_PROG", 1: "P2_WINS", -1: "P2_LOSES"},
     }
 
@@ -266,6 +276,7 @@ def build_kuhn_reward_machine(sigma_I: tuple) -> dict:
 # ---------------------------------------------------------------------------
 # DeterministicKuhnPokerTeacher
 # ---------------------------------------------------------------------------
+
 
 class DeterministicKuhnPokerTeacher:
     """
@@ -280,13 +291,13 @@ class DeterministicKuhnPokerTeacher:
     is already exact.
     """
 
-    P2_WINS  =  1
-    IN_PROG  =  0
+    P2_WINS = 1
+    IN_PROG = 0
     P2_LOSES = -1
 
     def __init__(self, dot_file: str, seq_sample_size: int = 200):
         raw = load_dot(dot_file)
-        self.machine         = _prepare_machine(raw)
+        self.machine = _prepare_machine(raw)
         self.seq_sample_size = seq_sample_size
 
         # Enumerate all complete hands
@@ -308,8 +319,10 @@ class DeterministicKuhnPokerTeacher:
         # Expose the explicit reward machine
         self.reward_machine = build_kuhn_reward_machine(self.sigma_I)
 
-        print(f"[teacher] Ready. {len(self.sigma_I)} symbols, "
-              f"reward machine has {len(self.reward_machine['states'])} states.")
+        print(
+            f"[teacher] Ready. {len(self.sigma_I)} symbols, "
+            f"reward machine has {len(self.reward_machine['states'])} states."
+        )
 
     # -----------------------------------------------------------------------
     # preference_query — fully deterministic
@@ -328,8 +341,10 @@ class DeterministicKuhnPokerTeacher:
         out1 = _eval_outcome(s1, self.P2_WINS, self.IN_PROG, self.P2_LOSES)
         out2 = _eval_outcome(s2, self.P2_WINS, self.IN_PROG, self.P2_LOSES)
 
-        if out1 > out2: return  1
-        if out1 < out2: return -1
+        if out1 > out2:
+            return 1
+        if out1 < out2:
+            return -1
         return 0
 
     # -----------------------------------------------------------------------
@@ -337,7 +352,7 @@ class DeterministicKuhnPokerTeacher:
     # -----------------------------------------------------------------------
 
     def set_student(self, init_state, delta, output_fnc):
-        pass   # API compatibility only
+        pass  # API compatibility only
 
     # -----------------------------------------------------------------------
     # sample_sequences
@@ -356,14 +371,16 @@ class DeterministicKuhnPokerTeacher:
             q = delta.get(q, {}).get(sym, q)
         return output_fnc.get(q, self.IN_PROG)
 
-    def equivalence_query(self, states, sigma_I, sigma_O, init_state, delta, output_fnc):
+    def equivalence_query(
+        self, states, sigma_I, sigma_O, init_state, delta, output_fnc
+    ):
         """
         Exhaustive check against every enumerated hand.
         Returns (True, None) or (False, (counterexample, correct_value)).
         """
         for seq in self.all_hands:
             teacher_val = _eval_outcome(seq, self.P2_WINS, self.IN_PROG, self.P2_LOSES)
-            hyp_val     = self._run_hypothesis(seq, init_state, delta, output_fnc)
+            hyp_val = self._run_hypothesis(seq, init_state, delta, output_fnc)
             if teacher_val != hyp_val:
                 return False, (seq, teacher_val)
         return True, None
@@ -391,8 +408,10 @@ class DeterministicKuhnPokerTeacher:
         print(f"\nTransitions (non-trivial only):")
         for state, trans in rm["delta"].items():
             for sym, nxt in sorted(trans.items()):
-                if nxt != state:   # only print state changes
-                    print(f"  {rm['state_names'][state]:10} --[{sym}]--> {rm['state_names'][nxt]}")
+                if nxt != state:  # only print state changes
+                    print(
+                        f"  {rm['state_names'][state]:10} --[{sym}]--> {rm['state_names'][nxt]}"
+                    )
 
 
 # ---------------------------------------------------------------------------
@@ -400,8 +419,8 @@ class DeterministicKuhnPokerTeacher:
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     teacher = DeterministicKuhnPokerTeacher(
-        dot_file        = "Kuhn_Poker/kuhn_poker.dot",
-        seq_sample_size = 200,
+        dot_file="Kuhn_Poker/kuhn_poker.dot",
+        seq_sample_size=200,
     )
 
     teacher.print_all_hands()
