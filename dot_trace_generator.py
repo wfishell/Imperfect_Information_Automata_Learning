@@ -1,3 +1,10 @@
+"""
+Random Trace Generator
+
+
+
+"""
+
 #!/usr/bin/env python3
 import argparse
 import json
@@ -8,12 +15,28 @@ import pydot
 
 
 def load_json(path):
+    """
+    Load Json
+
+    Loads a JSON file with expected automaton structure.
+    """
+
     with open(path) as f:
         data = json.load(f)
     return data
 
 
 def load_dot(path):
+    """
+    Load DOT
+
+    Loads a DOT file and extracts automaton structure.
+    Extracts states (including initial), alphabet, and transitions. 
+
+    Input: DOT file
+    Output: dict with keys "states", "initial", "alphabet", "transitions"
+    """
+
     graphs = pydot.graph_from_dot_file(path)
     graph = graphs[0]
 
@@ -55,6 +78,15 @@ def load_dot(path):
 
 
 def parse_formula_side(side):
+    """
+    Parse Formula Side (input or output)
+
+    Parses a formula side (input or output) into a dictionary of AP valuations.
+    
+    Input: string like "a&!b&c" or "a|b"
+    Output: dict like {"a": 1, "b": 0, "c": 1}
+    """
+
     literals = {}
     if not side:
         return literals
