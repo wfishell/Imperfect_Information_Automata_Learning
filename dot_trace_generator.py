@@ -1,8 +1,8 @@
 """
 Random Trace Generator
 
-
-
+Generates random traces from a given automaton (in JSON or DOT format).
+Outputs traces in Spot semantics format, suitable for use with Spot tools.
 """
 
 #!/usr/bin/env python3
@@ -100,12 +100,29 @@ def parse_formula_side(side):
 
 
 def simplify_disjunction(expr):
+    """
+    Simplify Disjunction
+
+    If the expression contains a disjunction (|),
+    we only take the first branch for simplicity.
+
+    Input: string like "(a&b)|(c&d)"
+    Output: string like "a&b"
+    """
+
     if "|" in expr:
         return expr.split("|", 1)[0].strip("() ")
     return expr.strip("() ")
 
 
 def step_to_spot(step, ap_order):
+    """
+    Step to Spot
+
+    Converts a single step of the trace (input/output)
+    into Spot semantics format.
+    """
+
     if "/" in step:
         inp, out = step.split("/", 1)
     else:
@@ -131,6 +148,12 @@ def step_to_spot(step, ap_order):
 
 
 def trace_to_spot(trace, ap_order):
+    """
+    Trace to Spot
+
+    Converts a trace (list of steps) into Spot semantics format.
+    """
+
     steps = []
     cycle_part = ""
     if "cycle{" in trace:
@@ -150,6 +173,13 @@ def trace_to_spot(trace, ap_order):
 
 
 def generate_trace(machine, length=10, cycle=False):
+    """
+    Generate Trace
+
+    Generates a random trace from given automaton.
+    Performs random walk of specified length from initial state.
+    """
+
     state = machine["initial"]
     transitions = machine["transitions"]
 
