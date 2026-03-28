@@ -193,6 +193,30 @@ def _to_symbol(inp_str: str, out_str: str) -> str:
 
 
 def _prepare_machine(machine: dict) -> dict:
+    """
+    Clean and normalize a raw DOT-loaded automaton for use by the teacher.
+
+    Performs two transformations on the transitions dict:
+
+    1. Drop sink-state transitions — any edge whose destination is state "24"
+       (the violation/error sink, reached when game assumptions are broken)
+       is removed. Only valid play paths are kept.
+
+    2. Flatten disjunctive edge labels — DOT edges can carry guards like
+       "(a1 & !a2 & ...) | (a0 & !a2 & ...)", representing multiple concrete
+       input patterns on one edge. Each disjunct is split into its own entry
+       in the transition table, all mapping to the same (dst, out). This lets
+       downstream code (_enumerate_all_hands) walk transitions one concrete
+       clause at a time without evaluating Boolean formulas.
+
+    Args:
+        machine (dict): Raw automaton dict from load_dot(), with keys
+            "states", "initial", "alphabet", and "transitions".
+
+    Returns:
+        dict: A copy of the input machine with a cleaned "transitions" dict.
+            All other fields (states, initial, alphabet) are preserved unchanged.
+    """
     clean: dict = {}
     for state, trans in machine["transitions"].items():
         for inp, (dst, out) in trans.items():
