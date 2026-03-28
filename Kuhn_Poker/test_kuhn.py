@@ -69,12 +69,45 @@ PHASE_BITS_WITH_END = {
 
 
 def expected_winner(c1, c2, phase, action):
+    """
+    Determine the expected winner of a Kuhn Poker hand.
+
+    On a FOLD action, the player who did NOT fold wins:
+    - If P2 or P2B folds, P1 wins (1, 0).
+    - Otherwise (P1 or P1B folded), P2 wins (0, 1).
+    On any showdown action, the higher card wins.
+
+    Args:
+        c1 (int): P1's card (J=0, Q=1, K=2).
+        c2 (int): P2's card.
+        phase (str): The game phase when the terminal action occurred.
+        action (tuple): The 3-bit action tuple (a0, a1, a2).
+
+    Returns:
+        tuple[int, int]: (win1, win2) where exactly one is 1.
+    """
     if action == FOLD:
         return (1, 0) if phase in (PH_P2, PH_P2B) else (0, 1)
     return (1, 0) if c1 > c2 else (0, 1)
 
 
 def is_terminal_no_end(phase, action):
+    """
+    Check whether a (phase, action) pair ends the hand in the no-end-phase spec.
+
+    In the Mealy (no 'end' phase) variant, the winner output is emitted on the
+    same step as the terminal action, so we need to know which actions are terminal:
+    - PH_P2 + CHECK/CALL/FOLD: P2's response always ends the hand unless P2 bets.
+    - PH_P1B + CALL/FOLD: P1's response to P2's bet ends the hand (no raise path).
+    - PH_P2B: any action at this phase is terminal (final re-raise resolution).
+
+    Args:
+        phase (str): Current game phase.
+        action (tuple): The 3-bit action tuple.
+
+    Returns:
+        bool: True if this is a terminal step.
+    """
     if phase == PH_P2 and action in (CHECK, CALL, FOLD):
         return True
     if phase == PH_P1B and action in (CALL, FOLD):
@@ -85,6 +118,24 @@ def is_terminal_no_end(phase, action):
 
 
 def make_step(c1, c2, action, phase, has_end):
+    """
+    Build the input signal dictionary for one automaton step.
+
+    Cards are 2-bit encoded: lo = bit 0, hi = bit 1.
+      J=0b00, Q=0b01, K=0b10
+    Action bits (a0, a1, a2) come directly from the action tuple.
+    Phase bits are looked up from PHASE_BITS_WITH_END or PHASE_BITS_NO_END.
+
+    Args:
+        c1 (int): P1's card value (0–2).
+        c2 (int): P2's card value (0–2).
+        action (tuple): 3-bit action (a0, a1, a2).
+        phase (str): Current game phase string (e.g. PH_DEAL, PH_P1).
+        has_end (bool): Whether to use the spec variant that includes an 'end' phase.
+
+    Returns:
+        dict[str, int]: Mapping of signal name -> 0 or 1 for this step.
+    """
     signals = {}
     signals["c1lo"] = c1 & 1
     signals["c1hi"] = (c1 >> 1) & 1
@@ -102,6 +153,28 @@ def make_step(c1, c2, action, phase, has_end):
 
 
 def generate_traces(has_end_phase=False):
+    """
+    Generate all valid Kuhn Poker game traces as sequences of automaton steps.
+
+    Iterates over all 6 card deal permutations (P1/P2 each get one of J/Q/K)
+    and all legal action sequences from each game state, building a complete
+    test suite covering every reachable play path.
+
+    Each trace is a list of (signals, expected_win1, expected_win2) tuples.
+    In the no-end-phase (Mealy) variant, win signals are emitted on the terminal
+    step itself. In the with-end-phase variant, a final PH_END step carries the
+    win signals.
+
+    Args:
+        has_end_phase (bool): If True, generate traces for the spec variant that
+            uses a dedicated 'end' phase to emit the winner. Default is False
+            (standard Mealy semantics).
+
+    Returns:
+        list[tuple[str, list]]: Each entry is (description, steps) where
+            description is a human-readable string of the play sequence and
+            steps is a list of (signal_dict, win1, win2) tuples.
+    """
     traces = []
     for c1, c2 in permutations([J, Q, K], 2):
         for p1a in [CHECK, BET1, BET2]:
@@ -174,6 +247,25 @@ def generate_traces(has_end_phase=False):
 
 
 def parse_hoa(filename):
+    """
+    Parse a Hanoi Omega Automata (HOA) file into an automaton structure.
+
+    Reads the HOA header for metadata and the --BODY-- section for transitions.
+    Transition guards are stored as raw strings for lazy evaluation by eval_guard.
+
+    Args:
+        filename (str): Path to the .hoa file.
+
+    Returns:
+        tuple:
+            num_states (int): Total number of states declared.
+            start_state (int): Index of the initial state.
+            ap_list (list[str]): Ordered list of atomic proposition names.
+            controllable_aps (list[int]): AP indices marked as outputs
+                (from the 'controllable-ap' header field).
+            states (dict[int, list[dict]]): Maps state index to a list of
+                transition dicts, each with keys 'guard' (str) and 'dest' (int).
+    """
     with open(filename, "r") as f:
         content = f.read()
     lines = content.strip().split("\n")
@@ -226,6 +318,22 @@ def parse_hoa(filename):
 
 
 def tokenize(s):
+    """
+    Tokenize a HOA guard string into a list of (type, value) pairs.
+
+    Token types:
+        '('  / ')'  : parentheses
+        '&'  / '|'  : logical AND / OR
+        '!'         : logical NOT
+        'V'         : boolean literal (True for 't', False for 'f')
+        'N'         : integer AP index
+
+    Args:
+        s (str): A HOA guard expression, e.g. "0&!1&2" or "t".
+
+    Returns:
+        list[tuple[str, Any]]: Ordered token list.
+    """
     tokens = []
     i = 0
     while i < len(s):
@@ -265,6 +373,19 @@ def tokenize(s):
 
 
 def eval_guard(guard_str, vals):
+    """
+    Evaluate a HOA guard expression against a valuation vector.
+
+    Parses and evaluates a Boolean formula over AP indices. The formula uses
+    integer AP indices (not names), so 'vals' must be indexed by AP position.
+
+    Args:
+        guard_str (str): A HOA guard string, e.g. "0&!1&2" or "t".
+        vals (list[bool]): Truth values indexed by AP index.
+
+    Returns:
+        bool: True if the guard is satisfied by the given valuation.
+    """
     s = guard_str.strip()
     if s == "t":
         return True
@@ -276,6 +397,7 @@ def eval_guard(guard_str, vals):
 
 
 def _p_or(t, p, v):
+    """Parse and evaluate a disjunction (lowest precedence)."""
     l, p = _p_and(t, p, v)
     while p < len(t) and t[p][0] == "|":
         p += 1
@@ -285,6 +407,7 @@ def _p_or(t, p, v):
 
 
 def _p_and(t, p, v):
+    """Parse and evaluate a conjunction."""
     l, p = _p_not(t, p, v)
     while p < len(t) and t[p][0] == "&":
         p += 1
@@ -294,6 +417,7 @@ def _p_and(t, p, v):
 
 
 def _p_not(t, p, v):
+    """Parse and evaluate a negation or delegate to atom."""
     if p < len(t) and t[p][0] == "!":
         p += 1
         r, p = _p_atom(t, p, v)
@@ -302,6 +426,7 @@ def _p_not(t, p, v):
 
 
 def _p_atom(t, p, v):
+    """Parse and evaluate a leaf: parenthesized subexpr, boolean literal, or AP index."""
     if p >= len(t):
         return False, p
     if t[p][0] == "(":
@@ -323,6 +448,26 @@ def _p_atom(t, p, v):
 
 
 def simulate_hoa(hoa_file, traces):
+    """
+    Simulate a HOA automaton against a set of test traces and report results.
+
+    For each step in each trace, the simulator:
+    1. Sets input AP values from the step's signal dict.
+    2. Tries all 2^(num_outputs) output combinations.
+    3. For each combination, checks all transitions from the current state.
+    4. Accepts the first transition whose guard is satisfied AND whose output
+       matches the expected (win1, win2) values.
+
+    A trace PASSES if every step finds such a matching transition.
+    A trace FAILS on the first step where no matching transition exists.
+
+    Args:
+        hoa_file (str): Path to the .hoa file to test.
+        traces (list[tuple[str, list]]): Test traces from generate_traces().
+
+    Returns:
+        bool: True if all traces passed, False if any failed.
+    """
     num_states, start_state, ap_list, controllable_aps, states = parse_hoa(hoa_file)
 
     print(f"\nParsed HOA: {hoa_file}")
@@ -461,6 +606,16 @@ def simulate_hoa(hoa_file, traces):
 
 
 def output_csv(traces, has_end):
+    """
+    Print all trace steps as CSV rows to stdout.
+
+    Columns are input signal names (excluding 'end' if not used),
+    followed by expected_win1, expected_win2, trace_id, and step index.
+
+    Args:
+        traces (list[tuple[str, list]]): Test traces from generate_traces().
+        has_end (bool): Whether the 'end' phase signal should be included.
+    """
     sigs = [s for s in ALL_INPUT_SIGNALS if has_end or s != "end"]
     print(",".join(sigs + ["expected_win1", "expected_win2", "trace_id", "step"]))
     for tid, (_, steps) in enumerate(traces):
@@ -472,6 +627,16 @@ def output_csv(traces, has_end):
 
 
 def output_json(traces):
+    """
+    Print all traces as a JSON document to stdout.
+
+    Structure: {"traces": [{"id": int, "description": str, "steps": [
+        {"inputs": {signal: val}, "expected": {"win1": int, "win2": int}}
+    ]}]}
+
+    Args:
+        traces (list[tuple[str, list]]): Test traces from generate_traces().
+    """
     out = {"traces": []}
     for tid, (desc, steps) in enumerate(traces):
         t = {"id": tid, "description": desc, "steps": []}
@@ -482,6 +647,14 @@ def output_json(traces):
 
 
 def output_traces(traces):
+    """
+    Print a human-readable summary of all traces to stdout.
+
+    For each step, shows the phase, action name, and win outcome.
+
+    Args:
+        traces (list[tuple[str, list]]): Test traces from generate_traces().
+    """
     print(f"{'='*80}\nKUHN POKER — {len(traces)} traces\n{'='*80}\n")
     for tid, (desc, steps) in enumerate(traces):
         print(f"--- Trace {tid}: {desc} ---")
@@ -509,6 +682,20 @@ def output_traces(traces):
 
 
 def main():
+    """
+    CLI entry point for the Kuhn Poker test harness.
+
+    Modes (select one flag):
+        --hoa FILE   Parse the HOA automaton and run all generated traces against it,
+                     printing pass/fail results. The 'end' phase is auto-detected.
+        --csv        Print all trace steps as CSV to stdout.
+        --json       Print all traces as JSON to stdout.
+        --traces     Print a human-readable trace summary to stdout.
+
+    Optional:
+        --with-end   Use the spec variant that includes an explicit 'end' phase
+                     (only applies to --csv, --json, --traces).
+    """
     parser = argparse.ArgumentParser(description="Kuhn Poker test harness v2")
     parser.add_argument("--hoa", type=str, help="Test a HOA automaton file")
     parser.add_argument("--csv", action="store_true")
