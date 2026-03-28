@@ -17,8 +17,10 @@ import sys
 import os
 import random
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, _HERE)
+_HERE     = os.path.dirname(os.path.abspath(__file__))  # src/pipeline/teacher/
+_PIPELINE = os.path.dirname(_HERE)                       # src/pipeline/
+_SRC      = os.path.dirname(_PIPELINE)                   # src/
+sys.path.insert(0, _SRC)
 
 from dot_trace_generator import load_dot
 
