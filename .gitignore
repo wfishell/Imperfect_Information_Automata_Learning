@@ -1,2 +1,7 @@
 # Python Virtual Environment
 .venv
+__pycache__
+
+# Generated pipeline artifacts
+corpus.json
+cache.json
