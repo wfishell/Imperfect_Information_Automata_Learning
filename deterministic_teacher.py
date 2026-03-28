@@ -228,6 +228,21 @@ def _prepare_machine(machine: dict) -> dict:
 
 
 def _enumerate_all_hands(machine: dict) -> list:
+    """
+    Enumerate every complete Kuhn Poker hand the automaton can produce.
+
+    Performs a depth-first search from the initial state, converting each
+    transition's input/output signals into a readable symbol via _to_symbol.
+    A path is considered complete when it loops back to the initial state,
+    which happens on every terminal action (the automaton resets for the next deal).
+
+    Args:
+        machine (dict): Cleaned automaton dict from _prepare_machine().
+
+    Returns:
+        list[tuple[str, ...]]: Unique complete hands, each a tuple of symbol
+            strings e.g. ('DEAL_King_Queen', 'P1_King_Queen_bet', 'P2_King_Queen_fold_W1').
+    """
     initial = machine["initial"]
     trans = machine["transitions"]
     complete = []
