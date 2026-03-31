@@ -1,0 +1,71 @@
+site_name: COMS 4232 Final Project
+site_description: Final project report for COMS 4232 at Columbia University
+site_author: Christian Scaff
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - toc.integrate
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - attr_list
+  - md_in_html
+  - footnotes
+  - tables
+  - toc:
+      permalink: true
+
+extra_javascript:
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+nav:
+  - Home: index.md
+  - Background:
+    - Overview: background/overview.md
+    - Related Work: background/related_work.md
+  - Methods:
+    - Approach: methods/approach.md
+    - Implementation: methods/implementation.md
+    - Notes: methods/notes.md
+  - Results:
+    - Experiments: results/experiments.md
+    - Analysis: results/analysis.md
+  - Discussion: discussion.md
+  - References: references.md
+  - Notes:
+    - March 27th: notes/march_27.md
