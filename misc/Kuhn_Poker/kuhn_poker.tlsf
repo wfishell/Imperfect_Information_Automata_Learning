@@ -1,9 +1,37 @@
 INFO {
-  TITLE:       "Kuhn Poker Arbiter"
-  DESCRIPTION: "Reactive arbiter for Kuhn Poker. 3-card deck (J<Q<K).
-                Ante 1 chip each. Min bet 1, max bet 2.
-                Mealy: outputs at step t depend on inputs at step t.
-                Winner is output on the same step as the terminal action."
+  TITLE:       "Kuhn Poker Arbiter v3"
+  DESCRIPTION: "Realizable arbiter for Kuhn Poker with perfect information.
+
+                The system (arbiter) takes ALL game state as inputs and
+                outputs only win1, win2, and game_over. This separation of
+                concerns makes the spec realizable: the system computes a
+                deterministic function of its inputs with no missing cases.
+
+                Chip arithmetic (antes, payouts, running totals) is handled
+                externally and fed in as inputs each step. The arbiter just
+                reads current chip counts to determine game_over.
+
+                Deck: Jack < Queen < King. Each player starts with 3 chips.
+                Antes are 1 chip each. Bets and raises may be 1 or 2 chips
+                (encoded via bs). A player with 0 chips triggers game_over.
+
+                Phase fix from v1: p2 is split into
+                  p2c  (P2 acts after P1 CHECK: may check or bet)
+                  p2r  (P2 acts after P1 BET:   may call or fold only)
+                This eliminates the illegal P2-check-after-P1-bet path.
+
+                Action encoding (a2 a1 a0):
+                  check : !a2 & !a1 &  a0
+                  bet   : !a2 &  a1 & !a0   (size 1 if !bs, 2 if bs)
+                  raise : !a2 &  a1 &  a0   (size 1 if !bs, 2 if bs)
+                  call  :  a2 & !a1 & !a0
+                  fold  :  a2 & !a1 &  a0
+
+                Chip inputs (3-bit binary per player, range 0-6):
+                  m1b2 m1b1 m1b0  ->  P1 chips = 4*m1b2 + 2*m1b1 + m1b0
+                  m2b2 m2b1 m2b0  ->  P2 chips = 4*m2b2 + 2*m2b1 + m2b0
+
+                Mealy: outputs at step t depend on inputs at step t."
   SEMANTICS:   Mealy
   TARGET:      Mealy
 }
@@ -12,188 +40,264 @@ INFO {
 MAIN {
 
   INPUTS {
-    c1lo; c1hi;    // P1 card
-    c2lo; c2hi;    // P2 card
-    a0; a1; a2;    // action bits this step
-    deal;          // phase signals (one-hot)
-    p1;
-    p2;
-    p1b;
-    p2b;
+    // --- Cards (dealt by environment, fixed within a hand) ---
+    c1hi; c1lo;     // P1 card: King=(1,0)  Queen=(0,1)  Jack=(0,0)
+    c2hi; c2lo;     // P2 card: same encoding
+
+    // --- Action bits ---
+    a0; a1; a2;     // action encoding (see header)
+    bs;             // bet/raise size: 0 = 1 chip, 1 = 2 chips
+
+    // --- Phase signals (exactly one true per step) ---
+    deal;           // cards dealt, antes taken
+    p1;             // P1 first action: check or bet
+    p2c;            // P2 after P1 CHECK: check or bet
+    p2r;            // P2 after P1 BET:  call or fold (no check)
+    p1b;            // P1 after P2 bet:  call, fold, or raise
+    p2b;            // P2 after P1 raise: call or fold
+
+    // --- Outstanding bet size (0 = 1 chip, 1 = 2 chips; 0 when no bet outstanding) ---
+    cur_bet;            // set by environment after each bet/raise action
+
+    // --- Current chip counts (updated externally each step, 3-bit binary) ---
+    m1b2; m1b1; m1b0;   // P1 chips
+    m2b2; m2b1; m2b0;   // P2 chips
   }
 
   OUTPUTS {
-    win1;
-    win2;
+    win1;       // P1 wins this hand (set on the terminal action step)
+    win2;       // P2 wins this hand (set on the terminal action step)
+    game_over;  // accepting state: at least one player has 0 chips
   }
+
 
   ASSUMPTIONS {
 
+    // -----------------------------------------------------------------------
+    // Initial chip counts: both players start with 3 chips (binary 011)
+    // -----------------------------------------------------------------------
+    (!m1b2 && m1b1 && m1b0);
+    (!m2b2 && m2b1 && m2b0);
 
-    G (( deal && !p1 && !p2 && !p1b && !p2b) ||
-       (!deal &&  p1 && !p2 && !p1b && !p2b) ||
-       (!deal && !p1 &&  p2 && !p1b && !p2b) ||
-       (!deal && !p1 && !p2 &&  p1b && !p2b) ||
-       (!deal && !p1 && !p2 && !p1b &&  p2b));
+    // -----------------------------------------------------------------------
+    // Phase mutual exclusion (exactly one phase active per step)
+    // -----------------------------------------------------------------------
+    G (( deal && !p1 && !p2c && !p2r && !p1b && !p2b) ||
+       (!deal &&  p1 && !p2c && !p2r && !p1b && !p2b) ||
+       (!deal && !p1 &&  p2c && !p2r && !p1b && !p2b) ||
+       (!deal && !p1 && !p2c &&  p2r && !p1b && !p2b) ||
+       (!deal && !p1 && !p2c && !p2r &&  p1b && !p2b) ||
+       (!deal && !p1 && !p2c && !p2r && !p1b &&  p2b));
 
+    // -----------------------------------------------------------------------
+    // Phase transitions -- p2 correctly split on P1's action
+    // -----------------------------------------------------------------------
     deal;
+
     G (deal -> X p1);
-    G (p1 -> X p2);
 
-    G ((p2 && !a2 && !a1 && a0) -> X deal);     // P2 check (terminal) -> new deal
-    G ((p2 && a2 && !a1 && !a0) -> X deal);     // P2 call (terminal) -> new deal
-    G ((p2 && a2 && !a1 && a0) -> X deal);      // P2 fold (terminal) -> new deal
-    G ((p2 && !a2 && a1) -> X p1b);             // P2 bet1/bet2 (non-terminal) -> p1b
+    // P1 check -> p2c;  P1 bet -> p2r
+    G ((p1 && !a2 && !a1 &&  a0) -> X p2c);
+    G ((p1 && !a2 &&  a1)        -> X p2r);
 
-    G ((p1b && a2 && !a1 && !a0) -> X deal);    // P1b call (terminal) -> new deal
-    G ((p1b && a2 && !a1 && a0) -> X deal);     // P1b fold (terminal) -> new deal
-    G ((p1b && !a2 && a1 && a0) -> X p2b);      // P1b raise (non-terminal) -> p2b
+    // p2c: check = terminal;  bet = p1b
+    G ((p2c && !a2 && !a1 && a0) -> X deal);
+    G ((p2c && !a2 &&  a1)       -> X p1b);
 
+    // p2r: call = terminal;  fold = terminal  (check is not a valid option here)
+    G ((p2r &&  a2 && !a1 && !a0) -> X deal);
+    G ((p2r &&  a2 && !a1 &&  a0) -> X deal);
+
+    // p1b: call = terminal;  fold = terminal;  raise -> p2b
+    G ((p1b &&  a2 && !a1 && !a0) -> X deal);
+    G ((p1b &&  a2 && !a1 &&  a0) -> X deal);
+    G ((p1b && !a2 &&  a1 &&  a0) -> X p2b);
+
+    // p2b: always terminal
     G (p2b -> X deal);
 
-    G F deal;
+    // -----------------------------------------------------------------------
+    // cur_bet tracking: environment sets cur_bet to bs after each bet/raise
+    // cur_bet is 0 (no outstanding bet) on deal steps and after check-check
+    // -----------------------------------------------------------------------
+    G (deal -> !cur_bet);
+    G ((p1 && !a2 && a1) -> (X cur_bet <-> bs));       // P1 bets: cur_bet = bs
+    G ((p2c && !a2 && a1) -> (X cur_bet <-> bs));      // P2c bets: cur_bet = bs
+    G ((p1b && !a2 && a1 && a0) -> (X cur_bet <-> bs)); // P1b raises: cur_bet = bs
+    G ((p1 && !a2 && !a1 && a0) -> !X cur_bet);        // P1 checks: no outstanding bet
+    G ((p2c && !a2 && !a1 && a0) -> !X cur_bet);       // P2c checks: no outstanding bet
 
+    // -----------------------------------------------------------------------
+    // Action constraints per phase
+    // -----------------------------------------------------------------------
+    G (deal -> (!a0 && !a1 && !a2 && !bs));
 
+    // P1: check or bet only
+    G (p1 -> ((!a2 && !a1 &&  a0) ||
+              (!a2 &&  a1 && !a0)));
+
+    // p2c: check or bet only
+    G (p2c -> ((!a2 && !a1 &&  a0) ||
+               (!a2 &&  a1 && !a0)));
+
+    // p2r: call or fold ONLY -- check is illegal after a bet
+    G (p2r -> (( a2 && !a1 && !a0) ||
+               ( a2 && !a1 &&  a0)));
+
+    // p1b: call, fold, or raise
+    G (p1b -> (( a2 && !a1 && !a0) ||
+               ( a2 && !a1 &&  a0) ||
+               (!a2 &&  a1 &&  a0)));
+
+    // p2b: call or fold only
+    G (p2b -> (( a2 && !a1 && !a0) ||
+               ( a2 && !a1 &&  a0)));
+
+    // -----------------------------------------------------------------------
+    // Bet validity: cannot bet more chips than you currently hold
+    //   P1 chips >= 1: m1b2 || m1b1 || m1b0
+    //   P1 chips >= 2: m1b2 || m1b1
+    // -----------------------------------------------------------------------
+    G ((p1  && !a2 && a1 &&  bs) -> (m1b2 || m1b1));
+    G ((p1  && !a2 && a1 && !bs) -> (m1b2 || m1b1 || m1b0));
+    G ((p2c && !a2 && a1 &&  bs) -> (m2b2 || m2b1));
+    G ((p2c && !a2 && a1 && !bs) -> (m2b2 || m2b1 || m2b0));
+    G ((p1b && !a2 && a1 &&  bs) -> (m1b2 || m1b1));
+    G ((p1b && !a2 && a1 && !bs) -> (m1b2 || m1b1 || m1b0));
+
+    // -----------------------------------------------------------------------
+    // Call validity: caller must have enough chips to match the outstanding bet
+    //   cur_bet=1 (2-chip bet) requires >= 2 chips; cur_bet=0 requires >= 1
+    // -----------------------------------------------------------------------
+    G ((p2r && a2 && !a1 && !a0 &&  cur_bet) -> (m2b2 || m2b1));
+    G ((p2r && a2 && !a1 && !a0 && !cur_bet) -> (m2b2 || m2b1 || m2b0));
+    G ((p1b && a2 && !a1 && !a0 &&  cur_bet) -> (m1b2 || m1b1));
+    G ((p1b && a2 && !a1 && !a0 && !cur_bet) -> (m1b2 || m1b1 || m1b0));
+    G ((p2b && a2 && !a1 && !a0 &&  cur_bet) -> (m2b2 || m2b1));
+    G ((p2b && a2 && !a1 && !a0 && !cur_bet) -> (m2b2 || m2b1 || m2b0));
+
+    // -----------------------------------------------------------------------
+    // Raise validity: opponent must have enough chips to match the raise
+    //   P1b raises (P2 must match): bs=1 needs m2b2||m2b1; bs=0 needs any chip
+    // -----------------------------------------------------------------------
+    G ((p1b && !a2 && a1 && a0 &&  bs) -> (m2b2 || m2b1));
+    G ((p1b && !a2 && a1 && a0 && !bs) -> (m2b2 || m2b1 || m2b0));
+
+    // -----------------------------------------------------------------------
+    // Card constraints
+    // -----------------------------------------------------------------------
     G (deal -> !(c1lo && c1hi));
     G (deal -> !(c2lo && c2hi));
     G (deal -> !((c1lo <-> c2lo) && (c1hi <-> c2hi)));
 
-
-    G (!deal -> (
-        (c1lo <-> X c1lo) && (c1hi <-> X c1hi) &&
-        (c2lo <-> X c2lo) && (c2hi <-> X c2hi)));
-
-    G (p1 -> ((c1lo <-> X c1lo) && (c1hi <-> X c1hi) &&
-              (c2lo <-> X c2lo) && (c2hi <-> X c2hi)));
-
-    G (deal -> ((c1lo <-> X c1lo) && (c1hi <-> X c1hi) &&
-                (c2lo <-> X c2lo) && (c2hi <-> X c2hi)));
-
-    G ((p2 && !a2 && a1) ->
+    // Cards are stable within a hand
+    G (!deal -> ((c1lo <-> X c1lo) && (c1hi <-> X c1hi) &&
+                 (c2lo <-> X c2lo) && (c2hi <-> X c2hi)));
+    G (deal  -> ((c1lo <-> X c1lo) && (c1hi <-> X c1hi) &&
+                 (c2lo <-> X c2lo) && (c2hi <-> X c2hi)));
+    G ((p2c && !a2 && a1) ->
        ((c1lo <-> X c1lo) && (c1hi <-> X c1hi) &&
         (c2lo <-> X c2lo) && (c2hi <-> X c2hi)));
-
     G ((p1b && !a2 && a1 && a0) ->
        ((c1lo <-> X c1lo) && (c1hi <-> X c1hi) &&
         (c2lo <-> X c2lo) && (c2hi <-> X c2hi)));
 
-    G (deal -> (!a0 && !a1 && !a2));
-
-    G (p1 -> ((!a2 && !a1 && a0) || (!a2 && a1 && !a0) || (!a2 && a1 && a0)));
-
-    G (p2 -> ((!a2 && !a1 && a0) || (!a2 && a1 && !a0) || (!a2 && a1 && a0) ||
-              (a2 && !a1 && !a0) || (a2 && !a1 && a0)));
-
-    G (p1b -> ((a2 && !a1 && !a0) || (a2 && !a1 && a0) || (!a2 && a1 && a0)));
-
-    G (p2b -> ((a2 && !a1 && !a0) || (a2 && !a1 && a0)));
+    // -----------------------------------------------------------------------
+    // game_over: no new hand may start when a player has 0 chips
+    // -----------------------------------------------------------------------
+    G (((!m1b2 && !m1b1 && !m1b0) || (!m2b2 && !m2b1 && !m2b0)) -> !X deal);
   }
+
 
   GUARANTEES {
 
+    // -----------------------------------------------------------------------
+    // game_over: set on deal steps when either player has 0 chips
+    // Only detectable at hand boundaries -- mid-hand chip reads are ignored.
+    // -----------------------------------------------------------------------
+    G (game_over <-> (deal && ((!m1b2 && !m1b1 && !m1b0) ||
+                               (!m2b2 && !m2b1 && !m2b0))));
 
-    G (deal -> (!win1 && !win2));
-    G (p1 -> (!win1 && !win2));
-
-    G ((p2 && !a2 && a1) -> (!win1 && !win2));
-
-    // P1b with raise (non-terminal): no winner
+    // -----------------------------------------------------------------------
+    // Non-terminal steps produce no winner
+    // -----------------------------------------------------------------------
+    G (deal  -> (!win1 && !win2));
+    G (p1    -> (!win1 && !win2));
+    G ((p2c && !a2 && a1)       -> (!win1 && !win2));
     G ((p1b && !a2 && a1 && a0) -> (!win1 && !win2));
 
-
-    G ((p2 && ((!a2 && !a1 && a0) || (a2 && !a1 && !a0) || (a2 && !a1 && a0)))
+    // -----------------------------------------------------------------------
+    // Terminal steps produce exactly one winner
+    // -----------------------------------------------------------------------
+    G (((p2c && !a2 && !a1 && a0) ||
+        (p2r &&  a2)               ||
+        (p1b &&  a2)               ||
+        p2b)
        -> ((win1 && !win2) || (!win1 && win2)));
 
-    // Terminal p1b (call/fold)
-    G ((p1b && ((a2 && !a1 && !a0) || (a2 && !a1 && a0)))
-       -> ((win1 && !win2) || (!win1 && win2)));
+    // -----------------------------------------------------------------------
+    // Fold outcomes
+    // -----------------------------------------------------------------------
+    G ((p2r &&  a2 && !a1 &&  a0) -> (win1 && !win2));   // P2r folds  -> P1 wins
+    G ((p1b &&  a2 && !a1 &&  a0) -> (!win1 && win2));   // P1b folds  -> P2 wins
+    G ((p2b &&  a2 && !a1 &&  a0) -> (win1 && !win2));   // P2b folds  -> P1 wins
 
-    // Terminal p2b (always terminal)
-    G (p2b -> ((win1 && !win2) || (!win1 && win2)));
+    // -----------------------------------------------------------------------
+    // Showdown outcomes: higher card wins
+    //   P1 > P2: King vs Queen, King vs Jack, Queen vs Jack
+    //   P2 > P1: King vs Queen, King vs Jack, Queen vs Jack  (P2 perspective)
+    // -----------------------------------------------------------------------
 
-
-    // P2 folds => P1 wins (same step)
-    G ((p2 && a2 && !a1 && a0) -> (win1 && !win2));
-
-    // P1b folds => P2 wins (same step)
-    G ((p1b && a2 && !a1 && a0) -> (!win1 && win2));
-
-    // P2b folds => P1 wins (same step)
-    G ((p2b && a2 && !a1 && a0) -> (win1 && !win2));
-
-    G ((p2 && !a2 && !a1 && a0 &&
-        (( c1hi && !c1lo && !c2hi &&  c2lo) ||
-         ( c1hi && !c1lo && !c2hi && !c2lo) ||
-         (!c1hi &&  c1lo && !c2hi && !c2lo)))
+    // p2c check (P1 checked, P2 checked -> showdown)
+    G ((p2c && !a2 && !a1 && a0 &&
+        ((c1hi && !c1lo && !c2hi &&  c2lo) ||    // P1=K P2=Q
+         (c1hi && !c1lo && !c2hi && !c2lo) ||    // P1=K P2=J
+         (!c1hi && c1lo && !c2hi && !c2lo)))      // P1=Q P2=J
        -> (win1 && !win2));
 
-    G ((p2 && !a2 && !a1 && a0 &&
-        (( c2hi && !c2lo && !c1hi &&  c1lo) ||
-         ( c2hi && !c2lo && !c1hi && !c1lo) ||
-         (!c2hi &&  c2lo && !c1hi && !c1lo)))
+    G ((p2c && !a2 && !a1 && a0 &&
+        ((c2hi && !c2lo && !c1hi &&  c1lo) ||    // P2=K P1=Q
+         (c2hi && !c2lo && !c1hi && !c1lo) ||    // P2=K P1=J
+         (!c2hi && c2lo && !c1hi && !c1lo)))      // P2=Q P1=J
        -> (!win1 && win2));
 
-    G ((p2 && a2 && !a1 && !a0 &&
-        (( c1hi && !c1lo && !c2hi &&  c2lo) ||
-         ( c1hi && !c1lo && !c2hi && !c2lo) ||
-         (!c1hi &&  c1lo && !c2hi && !c2lo)))
+    // p2r call (P1 bet, P2 called -> showdown)
+    G ((p2r && a2 && !a1 && !a0 &&
+        ((c1hi && !c1lo && !c2hi &&  c2lo) ||
+         (c1hi && !c1lo && !c2hi && !c2lo) ||
+         (!c1hi && c1lo && !c2hi && !c2lo)))
        -> (win1 && !win2));
 
-    G ((p2 && a2 && !a1 && !a0 &&
-        (( c2hi && !c2lo && !c1hi &&  c1lo) ||
-         ( c2hi && !c2lo && !c1hi && !c1lo) ||
-         (!c2hi &&  c2lo && !c1hi && !c1lo)))
+    G ((p2r && a2 && !a1 && !a0 &&
+        ((c2hi && !c2lo && !c1hi &&  c1lo) ||
+         (c2hi && !c2lo && !c1hi && !c1lo) ||
+         (!c2hi && c2lo && !c1hi && !c1lo)))
        -> (!win1 && win2));
+
+    // p1b call (P2 bet after P1 check, P1 called -> showdown)
+    G ((p1b && a2 && !a1 && !a0 &&
+        ((c1hi && !c1lo && !c2hi &&  c2lo) ||
+         (c1hi && !c1lo && !c2hi && !c2lo) ||
+         (!c1hi && c1lo && !c2hi && !c2lo)))
+       -> (win1 && !win2));
 
     G ((p1b && a2 && !a1 && !a0 &&
-        (( c1hi && !c1lo && !c2hi &&  c2lo) ||
-         ( c1hi && !c1lo && !c2hi && !c2lo) ||
-         (!c1hi &&  c1lo && !c2hi && !c2lo)))
-       -> (win1 && !win2));
-
-    G ((p1b && a2 && !a1 && !a0 &&
-        (( c2hi && !c2lo && !c1hi &&  c1lo) ||
-         ( c2hi && !c2lo && !c1hi && !c1lo) ||
-         (!c2hi &&  c2lo && !c1hi && !c1lo)))
+        ((c2hi && !c2lo && !c1hi &&  c1lo) ||
+         (c2hi && !c2lo && !c1hi && !c1lo) ||
+         (!c2hi && c2lo && !c1hi && !c1lo)))
        -> (!win1 && win2));
 
-    // --- P2b:call showdown ---
+    // p2b call (P1 raised, P2 called -> showdown)
     G ((p2b && a2 && !a1 && !a0 &&
-        (( c1hi && !c1lo && !c2hi &&  c2lo) ||
-         ( c1hi && !c1lo && !c2hi && !c2lo) ||
-         (!c1hi &&  c1lo && !c2hi && !c2lo)))
+        ((c1hi && !c1lo && !c2hi &&  c2lo) ||
+         (c1hi && !c1lo && !c2hi && !c2lo) ||
+         (!c1hi && c1lo && !c2hi && !c2lo)))
        -> (win1 && !win2));
 
     G ((p2b && a2 && !a1 && !a0 &&
-        (( c2hi && !c2lo && !c1hi &&  c1lo) ||
-         ( c2hi && !c2lo && !c1hi && !c1lo) ||
-         (!c2hi &&  c2lo && !c1hi && !c1lo)))
+        ((c2hi && !c2lo && !c1hi &&  c1lo) ||
+         (c2hi && !c2lo && !c1hi && !c1lo) ||
+         (!c2hi && c2lo && !c1hi && !c1lo)))
        -> (!win1 && win2));
-
-  //Just ensures someone wins 
-  G (((p2 && ((!a2 && !a1 && a0) || (a2 && !a1 && !a0) || (a2 && !a1 && a0))) ||
-     (p1b && ((a2 && !a1 && !a0) || (a2 && !a1 && a0))) ||
-     p2b)
-    -> ((win1 && !win2) || (!win1 && win2)));
   }
 }
-
-
-//Player 1 hand + actions, Player 2 hand + actions inputs
-// Win for player 1 or Win for player 2
-// -> 
-//Reward system which can take history of Player 1 hand + actions, Player 2 hand + actions inputs; Win1 or Win 2....
-// This is -2...+2. Arbitrary range.
-// Above is extraction for reward system
-//Below is learning of a deterministic policy of how to play the game for player 2.
-//What we want is Player 1 input actions given an unknown card,other input is our card.
-//Reactive system for rules for player 2 is non deterministic
-//EX. player 1 raises, king -> (raise again, fold, match)
-
-//A modification of L*
-//in L* you need a deterministic System under learning (SUL) AKA oracle.
-// Provide a random input for via random walk 
-//EX Player raises, Queen; -> {(raise again, fold, match)}
-// There exists three possible traces Player 1 raises, Queen->raise : Player 1 raises, Queen->Fold :Player 1 raises, Queen-> Match.
-
-//Player 1 raises, Queen->raise.....
