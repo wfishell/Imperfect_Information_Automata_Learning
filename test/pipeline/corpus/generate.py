@@ -5,6 +5,7 @@ Usage:
     python test/pipeline/corpus/generate.py
 """
 
+import json
 import os
 import sys
 
@@ -15,20 +16,10 @@ _SRC  = os.path.join(_ROOT, "src")
 sys.path.insert(0, _SRC)
 sys.path.insert(0, os.path.join(_SRC, "pipeline"))
 
-from pipeline.corpus.generate import generate
 from dot_trace_generator import load_dot, generate_trace
 from pipeline.config import DOT_FILE
 
-
-def test_corpus_generation():
-    hands = generate(dot_file=DOT_FILE, mode="sampled")
-
-    print(f"\n{'='*60}")
-    print(f"  CORPUS  ({len(hands)} sampled traces)")
-    print(f"{'='*60}")
-    for i, hand in enumerate(hands, 1):
-        print(f"  [{i:>3}]  {' -> '.join(hand)}")
-    print(f"{'='*60}\n")
+OUTPUT_PATH = os.path.join(_SRC, "data", "Kuhn_Poker", "corpus.json")
 
 
 def test_dot_trace_generation():
@@ -47,7 +38,11 @@ def test_dot_trace_generation():
             print(f"        {step.strip()}")
     print(f"\n{'='*60}\n")
 
+    payload = {"count": n, "traces": [t.split(";") for t in traces]}
+    with open(OUTPUT_PATH, "w") as f:
+        json.dump(payload, f, indent=2)
+    print(f"[test] Wrote {n} traces -> {OUTPUT_PATH}")
+
 
 if __name__ == "__main__":
-    test_corpus_generation()
     test_dot_trace_generation()
