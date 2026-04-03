@@ -38,7 +38,15 @@ def test_dot_trace_generation():
             print(f"        {step.strip()}")
     print(f"\n{'='*60}\n")
 
-    payload = {"count": n, "traces": [t.split(";") for t in traces]}
+    payload = {
+        "_schema": {
+            "description": "Sampled trace corpus generated from kuhn_poker.dot via dot_trace_generator.py",
+            "count": "number of traces",
+            "traces": "list of traces; each trace is a list of step strings in 'input_formula/output_formula' format",
+        },
+        "count": n,
+        "traces": [t.split(";") for t in traces],
+    }
     with open(OUTPUT_PATH, "w") as f:
         json.dump(payload, f, indent=2)
     print(f"[test] Wrote {n} traces -> {OUTPUT_PATH}")
