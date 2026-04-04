@@ -450,6 +450,107 @@ def print_partial_order_summary(po: nx.DiGraph) -> None:
 
 
 # ---------------------------------------------------------------------------
+# JSON export
+# ---------------------------------------------------------------------------
+
+def export_partial_order_json(
+    po: nx.DiGraph,
+    traces: list,
+    trace_ranks: dict,
+    path: str,
+) -> None:
+    """
+    Write traces (with ranks) and the full prefix partial order to a JSON file.
+
+    Schema
+    ------
+    {
+      "_schema": { ... },
+      "traces": [
+        { "trace_id": 0, "rank": 1, "steps": ["inp/out", ...] },
+        ...
+      ],
+      "prefixes": [
+        {
+          "prefix_id":       0,
+          "depth":           3,
+          "steps":           ["inp/out", "inp/out", "inp/out"],
+          "future_ranks":    [1, 4],
+          "future_trace_ids": [0, 3]
+        },
+        ...
+      ],
+      "partial_order": {
+        "dominance_edges":   [[p1_id, p2_id], ...],
+        "equivalent_pairs":  [[p1_id, p2_id], ...],
+        "incomparable_pairs": [[p1_id, p2_id], ...]
+      }
+    }
+
+    prefix_id 0 is always START (depth 0, no steps).
+    dominance_edges[i] = [a, b] means prefix a stochastically dominates prefix b.
+    """
+    # Build a stable prefix_id mapping (insertion order from compute_partial_order)
+    prefix_list = list(po.nodes())
+    prefix_to_id = {p: i for i, p in enumerate(prefix_list)}
+
+    prefixes_out = []
+    for p in prefix_list:
+        data = po.nodes[p]
+        steps = list(p[1:])  # strip START
+        prefixes_out.append({
+            "prefix_id":        prefix_to_id[p],
+            "depth":            len(steps),
+            "steps":            steps,
+            "future_ranks":     sorted(data["futures"]),
+            "future_trace_ids": sorted(data["trace_ids"]),
+        })
+
+    traces_out = [
+        {
+            "trace_id": i,
+            "rank":     trace_ranks[i],
+            "steps":    list(trace),
+        }
+        for i, trace in enumerate(traces)
+    ]
+
+    partial_order_out = {
+        "dominance_edges": [
+            [prefix_to_id[u], prefix_to_id[v]]
+            for u, v in po.edges()
+        ],
+        "equivalent_pairs": [
+            [prefix_to_id[p1], prefix_to_id[p2]]
+            for p1, p2 in po.graph["equivalent"]
+        ],
+        "incomparable_pairs": [
+            [prefix_to_id[p1], prefix_to_id[p2]]
+            for p1, p2 in po.graph["incomparable"]
+        ],
+    }
+
+    payload = {
+        "_schema": {
+            "traces":        "list of traces with their assigned rank (rank 1 = most preferred)",
+            "prefixes":      "list of all unique prefixes; depth=0 is START; steps exclude START",
+            "partial_order": {
+                "dominance_edges":    "[p1_id, p2_id] means prefix p1 stochastically dominates p2",
+                "equivalent_pairs":   "[p1_id, p2_id] means identical future-rank CDF",
+                "incomparable_pairs": "[p1_id, p2_id] means CDFs cross -- neither dominates",
+            },
+        },
+        "traces":        traces_out,
+        "prefixes":      prefixes_out,
+        "partial_order": partial_order_out,
+    }
+
+    with open(path, "w") as f:
+        json.dump(payload, f, indent=2)
+    print(f"[partial order] Exported -> {path}")
+
+
+# ---------------------------------------------------------------------------
 # Entry point  /  unit test
 # ---------------------------------------------------------------------------
 
@@ -480,3 +581,6 @@ if __name__ == "__main__":
 
     po = compute_partial_order(G, traces, trace_ranks)
     print_partial_order_summary(po)
+
+    po_path = os.path.join(_SRC, "data", "Kuhn_Poker", "partial_order.json")
+    export_partial_order_json(po, traces, trace_ranks, po_path)
