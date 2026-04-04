@@ -2,6 +2,9 @@
 .venv
 __pycache__
 
+# Environment / secrets — never commit
+.env
+
 # Generated pipeline artifacts
 corpus.json
 cache.json
