@@ -450,6 +450,122 @@ def print_partial_order_summary(po: nx.DiGraph) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Hasse diagram
+# ---------------------------------------------------------------------------
+
+def plot_hasse(po: nx.DiGraph, traces: list, path: str) -> None:
+    """
+    Draw the Hasse diagram of the stochastic-dominance partial order and
+    save it as a PNG.
+
+    The Hasse diagram is the transitive reduction of the dominance DAG —
+    only direct parent-child edges are shown; edges implied by transitivity
+    are removed.  This makes the structure readable.
+
+    Layout:   nodes layered by prefix depth on the y-axis.
+    Color:    encodes future quality —
+                blue   — START
+                green  — futures resolve to a single top-ranked trace
+                red    — futures resolve to a single bottom-ranked trace
+                yellow — futures are mixed (multiple possible outcomes)
+    Labels:   prefix_id integers (cross-reference with partial_order.json).
+    """
+    try:
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as mpatches
+    except ImportError:
+        print("[hasse] matplotlib not installed.  Run: pip install matplotlib")
+        return
+
+    from collections import defaultdict
+
+    n_traces = len(traces)
+
+    # Transitive reduction — transitive_reduction does not copy node attrs
+    hasse = nx.transitive_reduction(po)
+    for node in hasse.nodes():
+        hasse.nodes[node].update(po.nodes[node])
+
+    # Stable prefix_id mapping (same order as export_partial_order_json)
+    prefix_list  = list(po.nodes())
+    prefix_to_id = {p: i for i, p in enumerate(prefix_list)}
+
+    # Layer nodes by depth; sort within layer by best reachable rank
+    layers = defaultdict(list)
+    for node in hasse.nodes():
+        layers[len(node) - 1].append(node)  # depth = prefix length - START
+
+    for depth in layers:
+        layers[depth].sort(key=lambda n: (
+            min(po.nodes[n]["futures"]) if po.nodes[n]["futures"] else 999
+        ))
+
+    pos = {}
+    for depth, nodes in layers.items():
+        for i, node in enumerate(nodes):
+            pos[node] = (i - (len(nodes) - 1) / 2.0, -depth)
+
+    # Node colors
+    cmap = plt.cm.RdYlGn
+    node_colors = []
+    for node in hasse.nodes():
+        futures = po.nodes[node]["futures"]
+        if len(node) == 1:                    # START
+            node_colors.append("#4C9BE8")
+        elif not futures:
+            node_colors.append("#CCCCCC")
+        elif len(futures) == 1:
+            rank = next(iter(futures))
+            norm = 1.0 - (rank - 1) / max(n_traces - 1, 1)  # rank 1 -> 1.0 (green)
+            node_colors.append(cmap(norm))
+        else:
+            node_colors.append("#F5E642")     # yellow = mixed futures
+
+    labels   = {node: str(prefix_to_id[node]) for node in hasse.nodes()}
+    max_w    = max(len(v) for v in layers.values())
+    max_d    = max(layers.keys())
+    fig_w    = max(18, max_w * 1.4)
+    fig_h    = max(10, max_d * 1.6)
+
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+    ax.set_title(
+        "Hasse Diagram — Stochastic Dominance Partial Order\n"
+        "(node labels = prefix_id  |  edge = direct dominance  |  "
+        "depth = steps from START)",
+        fontsize=12,
+    )
+
+    nx.draw_networkx(
+        hasse, pos=pos, ax=ax,
+        node_color=node_colors,
+        node_size=420,
+        labels=labels,
+        font_size=7,
+        font_weight="bold",
+        arrows=True,
+        arrowsize=12,
+        edge_color="#888888",
+        width=0.8,
+    )
+
+    legend_handles = [
+        mpatches.Patch(color="#4C9BE8", label="START"),
+        mpatches.Patch(color=cmap(1.0),  label="futures = {rank 1}  (best)"),
+        mpatches.Patch(color=cmap(0.5),  label="futures = {middle rank}"),
+        mpatches.Patch(color=cmap(0.0),  label=f"futures = {{rank {n_traces}}}  (worst)"),
+        mpatches.Patch(color="#F5E642",  label="futures = mixed  (multiple traces)"),
+        mpatches.Patch(color="#CCCCCC",  label="no futures"),
+    ]
+    ax.legend(handles=legend_handles, loc="upper right", fontsize=9)
+    ax.axis("off")
+
+    plt.tight_layout()
+    plt.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"[hasse] Saved -> {path}")
+
+
+# ---------------------------------------------------------------------------
 # JSON export
 # ---------------------------------------------------------------------------
 
@@ -584,3 +700,6 @@ if __name__ == "__main__":
 
     po_path = os.path.join(_SRC, "data", "Kuhn_Poker", "partial_order.json")
     export_partial_order_json(po, traces, trace_ranks, po_path)
+
+    hasse_path = os.path.join(_SRC, "data", "Kuhn_Poker", "hasse.png")
+    plot_hasse(po, traces, hasse_path)
