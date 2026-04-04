@@ -5,7 +5,6 @@ Usage:
     python test/pipeline/corpus/generate.py
 """
 
-import json
 import os
 import sys
 
@@ -16,10 +15,9 @@ _SRC  = os.path.join(_ROOT, "src")
 sys.path.insert(0, _SRC)
 sys.path.insert(0, os.path.join(_SRC, "pipeline"))
 
+from pipeline.corpus.generate import generate
 from dot_trace_generator import load_dot, generate_trace
 from pipeline.config import DOT_FILE
-
-OUTPUT_PATH = os.path.join(_SRC, "data", "Kuhn_Poker", "corpus.json")
 
 
 def test_dot_trace_generation():
@@ -38,19 +36,7 @@ def test_dot_trace_generation():
             print(f"        {step.strip()}")
     print(f"\n{'='*60}\n")
 
-    payload = {
-        "_schema": {
-            "description": "Sampled trace corpus generated from kuhn_poker.dot via dot_trace_generator.py",
-            "count": "number of traces",
-            "traces": "list of traces; each trace is a list of step strings in 'input_formula/output_formula' format",
-        },
-        "count": n,
-        "traces": [t.split(";") for t in traces],
-    }
-    with open(OUTPUT_PATH, "w") as f:
-        json.dump(payload, f, indent=2)
-    print(f"[test] Wrote {n} traces -> {OUTPUT_PATH}")
-
 
 if __name__ == "__main__":
+    # Tests Trace Generation of kuhn_poker.dot and writes to corpus.json
     test_dot_trace_generation()
