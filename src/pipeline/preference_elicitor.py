@@ -25,6 +25,7 @@ import time
 
 import anthropic
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from api_keys import load_api_key
 
 
