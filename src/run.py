@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-run.py — Full preference-elicitation pipeline (Steps 1–3).
+run.py — Full preference-elicitation pipeline (Steps 1–4).
 
 Step 1  Generate traces from an automaton (dot_trace_generator)
 Step 2  Elicit pairwise preferences from an LLM (preference_elicitor)
 Step 3  Check consistency and resolve cycles (consistency_checker)
+Step 4  Build preference power set over all trace prefixes (preference_power_set)
 
 Each step can be skipped if its output file already exists by passing
 --skip-traces / --skip-prefs respectively.
@@ -16,14 +17,15 @@ Example (mirrors the README full-pipeline block):
     --fmt dot \\
     --aps a0,a1,a2,bs,c1hi,c1lo,c2hi,c2lo,cur_bet,deal,m1b0,m1b1,m1b2,m2b0,m2b1,m2b2,p1,p1b,p2b,p2c,p2r \\
     --num 10 --length 8 \\
-    --traces-out src/data/kuhn_poker/kuhn_traces.txt \\
+    --traces-out src/data/Kuhn_Poker/output/kuhn_traces.txt \\
     --prompt "You are evaluating a Kuhn Poker player. Prefer traces where the player bluffs with low cards and value-bets with high cards. Penalize passive play or over-bluffing." \\
     --model claude-haiku-4-5-20251001 \\
     --K 50 --enrich kuhn_poker --chunk-delay 10 \\
-    --prefs-out src/data/kuhn_poker/kuhn_prefs.json \\
+    --prefs-out src/data/Kuhn_Poker/output/kuhn_prefs.json \\
     --max-rounds 3 \\
-    --clean-out src/data/kuhn_poker/kuhn_prefs_clean.json \\
-    --plot src/data/kuhn_poker/pref_graph.png \\
+    --clean-out src/data/Kuhn_Poker/output/kuhn_prefs_clean.json \\
+    --plot src/data/Kuhn_Poker/output/pref_graph.png \\
+    --prefix-prefs-out src/data/Kuhn_Poker/output/prefix_preferences.json \\
     --verbose
 """
 
@@ -40,6 +42,7 @@ sys.path.insert(0, _SRC)
 from pipeline import dot_trace_generator as _dtg
 from pipeline import preference_elicitor as _pe
 from pipeline import consistency_checker as _cc
+from pipeline import preference_power_set as _pps
 
 
 # ---------------------------------------------------------------------------
@@ -165,6 +168,29 @@ def step3_check_consistency(args, prefs: list, traces: list) -> list:
 
 
 # ---------------------------------------------------------------------------
+# Step 4 — Preference power set over prefixes
+# ---------------------------------------------------------------------------
+
+def step4_prefix_preferences(args, traces: list, clean_prefs: list) -> list:
+    """Returns pairwise prefix preference list."""
+    print(f"[run] Step 4 — building preference power set over trace prefixes ...")
+
+    G           = _pps.build_graph(traces)
+    trace_ranks = _pps.build_trace_ranks(clean_prefs, len(traces))
+    prefix_prefs = _pps.compute_prefix_preferences(G, traces, trace_ranks)
+
+    if args.prefix_prefs_out:
+        os.makedirs(os.path.dirname(os.path.abspath(args.prefix_prefs_out)), exist_ok=True)
+        with open(args.prefix_prefs_out, "w") as f:
+            json.dump(prefix_prefs, f, indent=2)
+        print(f"[run] Step 4 done — saved {len(prefix_prefs)} prefix preferences to {args.prefix_prefs_out}")
+    else:
+        print(f"[run] Step 4 done — {len(prefix_prefs)} prefix preferences (no output file specified)")
+
+    return prefix_prefs
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -218,6 +244,11 @@ def build_parser() -> argparse.ArgumentParser:
     g3.add_argument("--plot", default=None,
                     help="Save preference graph as PNG to this path.")
 
+    # ── Step 4: preference power set ────────────────────────────────────────
+    g4 = p.add_argument_group("Step 4 — Preference power set")
+    g4.add_argument("--prefix-prefs-out", default="data/kuhn_poker/prefix_preferences.json",
+                    help="Output path for prefix pairwise preferences (.json).")
+
     # ── General ─────────────────────────────────────────────────────────────
     p.add_argument("--verbose", action="store_true", help="Print progress to stderr.")
 
@@ -228,9 +259,10 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
 
-    traces = step1_generate_traces(args)
-    prefs = step2_elicit_preferences(args, traces)
-    step3_check_consistency(args, prefs, traces)
+    traces      = step1_generate_traces(args)
+    prefs       = step2_elicit_preferences(args, traces)
+    clean_prefs = step3_check_consistency(args, prefs, traces)
+    step4_prefix_preferences(args, traces, clean_prefs)
 
 
 if __name__ == "__main__":

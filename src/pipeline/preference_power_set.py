@@ -46,9 +46,9 @@ _HERE        = os.path.dirname(os.path.abspath(__file__))          # src/pipelin
 _SRC         = os.path.dirname(_HERE)                              # src/
 _DATA        = os.path.join(_SRC, "data", "Kuhn_Poker")
 
-TRACES_PATH  = os.path.join(_DATA, "kuhn_traces.txt")
-PREFS_PATH   = os.path.join(_DATA, "kuhn_prefs_clean.json")
-OUTPUT_PATH  = os.path.join(_DATA, "prefix_preferences.json")
+TRACES_PATH  = os.path.join(_DATA, "output", "kuhn_traces.txt")
+PREFS_PATH   = os.path.join(_DATA, "output", "kuhn_prefs_clean.json")
+OUTPUT_PATH  = os.path.join(_DATA, "output", "prefix_preferences.json")
 
 START = "__START__"
 
