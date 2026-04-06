@@ -91,8 +91,7 @@ What graphical algorithms can I use to tackle this? Give me some ideas.
 
   φ(v) = Σ over traces T containing v: [rank(T) / |T|]
 
-  This is the fairness-optimal solution — it distributes credit across nodes such that no node is systematically over- or under-credited. The "locally suboptimal node in a globally
-   preferred trace" problem is handled by averaging across the full coalition.
+  This is the fairness-optimal solution — it distributes credit across nodes such that no node is systematically over- or under-credited. The "locally suboptimal node in a globally preferred trace" problem is handled by averaging across the full coalition.
 
   The subtrace version: Shapley value of a subtrace = sum of Shapley values of its nodes.
 
@@ -144,9 +143,8 @@ What graphical algorithms can I use to tackle this? Give me some ideas.
 
   Given that you already have a total order and a DAG, I'd start with:
 
-  1. LP approach — because it directly answers "is there a consistent local assignment?" and if not, tells you where the contradiction lies. This feeds directly into automata
-  learning (inconsistent preferences = counterexample for the learner).
+  1. LP approach — because it directly answers "is there a consistent local assignment?" and if not, tells you where the contradiction lies. This feeds directly into automata learning (inconsistent preferences = counterexample for the learner).
   2. Shapley values — as a fallback when LP is infeasible or underdetermined; gives you a principled "best guess" at node quality even under contradictory global preferences.
 
-  The LP approach is particularly interesting for your research context because infeasibility corresponds to imperfect information creating irreducible ambiguity — which is exactly
-   the phenomenon you're trying to model with the automata learner.
+  The LP approach is particularly interesting for your research context because infeasibility corresponds to imperfect information creating irreducible ambiguity — which is exactly the phenomenon you're trying to model with the automata learner.
+  
