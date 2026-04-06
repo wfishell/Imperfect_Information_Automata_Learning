@@ -5,6 +5,135 @@ git clone https://github.com/eric-hsiung/REMAP.git
 1. Get preference querying working for Kuhn Poker with perfect information game working. Currently have an HOA and TLSF file for Kuhn poker. Can use dot_trace_generator.py to generate a lot of traces of games for data gen
 2. Need to figure out if REMAP training data intake works as I think it does.
 3. Once we get reward machine LLM working we can go onto step two of L* modification
+# Current Work - Will: Thursday & Friday, April 2nd and #rd
+Built out the updated Kuhn Poker tlsf file, Consistency checker, semantics python files and preference elicitor. Essentially the Kuhn poker  tlsf file needs to be synthesized. The correct Dot and HOA are on this branch. The preference_elicitory.py takes in a text file of traces generated from the dot_trace_generator.py file and a prompt and compares them given some model. These are then outputted as a prefs.json file. The consitency_checker.py which constructs a graph and checks for cycles and then repreferences  using the LLM.
+
+## How to run
+
+### Step 1 — Generate traces from the automaton
+
+```bash
+python src/dot_trace_generator.py \
+  src/data/Kuhn_Poker/kuhn_poker.dot \
+  --fmt dot \
+  --aps a0,a1,a2,bs,c1hi,c1lo,c2hi,c2lo,cur_bet,deal,m1b0,m1b1,m1b2,m2b0,m2b1,m2b2,p1,p1b,p2b,p2c,p2r \
+  --num 10 \
+  --length 8 \
+  --out data/kuhn_poker/kuhn_traces.txt
+```
+
+| Argument | Description |
+|---|---|
+| `file` (positional) | Path to automaton — JSON or DOT |
+| `--fmt` | `json` or `dot` |
+| `--aps` | Comma-separated APs in a fixed order |
+| `-n / --num` | Number of traces to generate (default: 5) |
+| `-l / --length` | Steps per trace (default: 10) |
+| `--cycle` | Append `cycle{1}` to each trace |
+| `--out` | Output `.txt` path; omit to print to stdout |
+
+---
+
+### Step 2 — Elicit pairwise preferences with a player-evaluation prompt
+
+```bash
+python src/preference_elicitor.py \
+  data/kuhn_poker/kuhn_traces.txt \
+  --prompt "You are evaluating a Kuhn Poker player. \
+Prefer traces where the player bluffs with low cards and value-bets with high cards. \
+Penalize passive play (always checking) or over-bluffing." \
+  --model claude-haiku-4-5-20251001 \
+  --K 50 \
+  --enrich kuhn_poker \
+  --chunk-delay 10 \
+  --output data/kuhn_poker/kuhn_prefs.json \
+  --verbose
+```
+
+| Argument | Description |
+|---|---|
+| `traces` (positional) | `.txt` file of traces, one per line |
+| `--prompt` | System prompt string **or** path to a `.txt` file containing it |
+| `--model` | Anthropic model ID (default: `claude-haiku-4-5-20251001`) |
+| `--K` | Pairs per LLM chunk (default: 50) |
+| `--enrich` | `kuhn_poker` — translates APs to readable descriptions before sending to LLM |
+| `--chunk-delay` | Seconds between chunks to avoid rate limits (default: 10) |
+| `--output` | Path to write preferences JSON (default: `preferences.json`) |
+| `--verbose` | Print progress to stderr |
+
+**Output JSON format** (`kuhn_prefs.json`):
+```json
+[
+  {"i": 0, "j": 1, "pref": 1,  "trace_i": "...", "trace_j": "..."},
+  {"i": 0, "j": 2, "pref": -1, "trace_i": "...", "trace_j": "..."}
+]
+```
+`pref = 1` → trace `i` preferred; `-1` → trace `j` preferred; `0` → indifferent.
+
+---
+
+### Step 3 — Check consistency and resolve preference cycles
+
+```bash
+python src/consistency_checker.py \
+  data/kuhn_poker/kuhn_prefs.json \
+  data/kuhn_poker/kuhn_traces.txt \
+  --prompt "You are evaluating a Kuhn Poker player. \
+Prefer traces where the player bluffs with low cards and value-bets with high cards. \
+Penalize passive play (always checking) or over-bluffing." \
+  --model claude-haiku-4-5-20251001 \
+  --max-rounds 3 \
+  --enrich kuhn_poker \
+  --output data/kuhn_poker/kuhn_prefs_clean.json \
+  --plot data/kuhn_poker/pref_graph.png \
+  --verbose
+```
+
+| Argument | Description |
+|---|---|
+| `prefs` (positional) | Preferences JSON from Step 2 |
+| `traces` (positional) | Same `.txt` traces file used in Step 2 |
+| `--prompt` | Same system prompt (or file path) used in Step 2 |
+| `--model` | Anthropic model ID |
+| `--max-rounds` | Max LLM re-query rounds before dropping cycle edges (default: 3) |
+| `--enrich` | `kuhn_poker` enricher |
+| `--output` | Path to write cleaned preferences JSON; omit to print to stdout |
+| `--plot` | Save preference graph as PNG (green edges = consistent, red = cyclic MFAS edges) |
+| `--verbose` | Print cycle/MFAS progress to stderr |
+
+---
+
+### Full pipeline in one block
+
+```bash
+# 1. Generate traces
+python src/dot_trace_generator.py \
+  src/data/Kuhn_Poker/kuhn_poker.dot \
+  --fmt dot \
+  --aps a0,a1,a2,bs,c1hi,c1lo,c2hi,c2lo,cur_bet,deal,m1b0,m1b1,m1b2,m2b0,m2b1,m2b2,p1,p1b,p2b,p2c,p2r \
+  --num 10 --length 8 \
+  --out data/kuhn_poker/kuhn_traces.txt
+
+# 2. Elicit preferences
+python src/preference_elicitor.py \
+  data/kuhn_poker/kuhn_traces.txt \
+  --prompt "You are evaluating a Kuhn Poker player. Prefer traces where the player bluffs with low cards and value-bets with high cards. Penalize passive play or over-bluffing." \
+  --enrich kuhn_poker \
+  --output data/kuhn_poker/kuhn_prefs.json \
+  --verbose
+
+# 3. Check consistency -> cleaned JSON
+python src/consistency_checker.py \
+  data/kuhn_poker/kuhn_prefs.json \
+  data/kuhn_poker/kuhn_traces.txt \
+  --prompt "You are evaluating a Kuhn Poker player. Prefer traces where the player bluffs with low cards and value-bets with high cards. Penalize passive play or over-bluffing." \
+  --enrich kuhn_poker \
+  --output data/kuhn_poker/kuhn_prefs_clean.json \
+  --plot data/kuhn_poker/pref_graph.png \
+  --verbose
+```
+
+> **Note:** `--prompt` accepts either an inline string or a path to a `.txt` file. Storing the prompt in a file (e.g. `data/kuhn_poker/player_eval_prompt.txt`) and passing that path keeps Steps 2 and 3 guaranteed to use the same prompt without copy-paste drift.
 
 
 # Current Work - Christian: Saturday, March 28th
