@@ -13,7 +13,7 @@ Each step can be skipped if its output file already exists by passing
 Example (mirrors the README full-pipeline block):
 
   python src/run.py \\
-    src/data/Kuhn_Poker/kuhn_poker.dot \\
+    src/data/Kuhn_Poker/input/kuhn_poker.dot \\
     --fmt dot \\
     --aps a0,a1,a2,bs,c1hi,c1lo,c2hi,c2lo,cur_bet,deal,m1b0,m1b1,m1b2,m2b0,m2b1,m2b2,p1,p1b,p2b,p2c,p2r \\
     --num 10 --length 8 \\
@@ -43,6 +43,7 @@ from pipeline import dot_trace_generator as _dtg
 from pipeline import preference_elicitor as _pe
 from pipeline import consistency_checker as _cc
 from pipeline import preference_power_set as _pps
+from pipeline import visualizer as _viz
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +155,7 @@ def step3_check_consistency(args, prefs: list, traces: list) -> list:
 
     if args.plot:
         os.makedirs(os.path.dirname(os.path.abspath(args.plot)), exist_ok=True)
-        _cc.plot_graph(prefs, args.plot, enricher=enricher, traces=traces)
+        _viz.plot_graph(prefs, args.plot, enricher=enricher, traces=traces)
 
     if args.clean_out:
         os.makedirs(os.path.dirname(os.path.abspath(args.clean_out)), exist_ok=True)
@@ -196,7 +197,7 @@ def step4_prefix_preferences(args, traces: list, clean_prefs: list) -> list:
         t3 = time.time()
         os.makedirs(os.path.dirname(os.path.abspath(args.prefix_prefs_out)), exist_ok=True)
         with open(args.prefix_prefs_out, "w") as f:
-            json.dump(prefix_prefs, f)
+            json.dump(prefix_prefs, f, indent=2)
         print(f"[run] Step 4   written to disk      ({time.time()-t3:.2f}s)  -> {args.prefix_prefs_out}")
         print(f"[run] Step 4 done (total {time.time()-t0:.2f}s)")
     else:

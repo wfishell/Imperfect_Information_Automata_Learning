@@ -25,10 +25,6 @@ import os
 from itertools import combinations
 
 import anthropic
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import networkx as nx
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from api_keys import load_api_key
@@ -373,59 +369,6 @@ def run(prefs: list, traces: list, system_prompt: str, model: str,
 
 
 # ---------------------------------------------------------------------------
-# Visualization
-# ---------------------------------------------------------------------------
-
-def plot_graph(prefs: list, output_path: str, enricher=None, traces: list = None):
-    """
-    Render the preference graph as a PNG.
-    - Nodes labeled T0..TN with optional one-line trace summary
-    - Green edges: strict preference
-    - Red edges: edges in cycles (MFAS)
-    """
-    expanded = expand_symmetric(prefs)
-    graph = build_graph(expanded)
-    sccs = tarjan_sccs(graph)
-    cycle_edges = set(get_cycle_edges(graph, sccs))
-    mfas = set(map(tuple, min_feedback_arc_set(graph)))
-
-    G = nx.DiGraph()
-    for p in expanded:
-        if p["pref"] == 1:
-            G.add_edge(p["i"], p["j"])
-
-    pos = nx.circular_layout(G)
-
-    # Node labels
-    labels = {}
-    for n in G.nodes():
-        if traces and enricher:
-            summary = enricher.summarize_trace(traces[n])
-            labels[n] = f"T{n}\n{summary}"
-        else:
-            labels[n] = f"T{n}"
-
-    edge_colors = ["red" if (u, v) in mfas or (u, v) in cycle_edges else "#4488cc"
-                   for u, v in G.edges()]
-
-    fig, ax = plt.subplots(figsize=(14, 10))
-    nx.draw_networkx_nodes(G, pos, ax=ax, node_size=800, node_color="#eeeeee", edgecolors="black")
-    nx.draw_networkx_labels(G, pos, labels=labels, ax=ax, font_size=7)
-    nx.draw_networkx_edges(G, pos, ax=ax, edge_color=edge_colors, arrows=True,
-                           arrowsize=15, width=1.5, connectionstyle="arc3,rad=0.1")
-
-    cycle_count = len(sccs)
-    title = "Preference Graph — CONSISTENT" if cycle_count == 0 else \
-            f"Preference Graph — {cycle_count} cycle(s), {len(mfas)} MFAS edge(s) in red"
-    ax.set_title(title, fontsize=11)
-    ax.axis("off")
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=150)
-    plt.close()
-    print(f"[checker] Graph saved to {output_path}")
-
-
-# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -468,6 +411,7 @@ def main():
                 verbose=args.verbose)
 
     if args.plot:
+        from pipeline.visualizer import plot_graph
         plot_graph(prefs, args.plot, enricher=enricher, traces=traces)
 
     if args.output:
