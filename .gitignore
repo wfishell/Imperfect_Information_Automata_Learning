@@ -8,3 +8,6 @@ __pycache__
 # Generated pipeline artifacts
 src/data/Kuhn_Poker/input/*
 src/data/Kuhn_Poker/output/*
+
+# Personal Notes
+/notes

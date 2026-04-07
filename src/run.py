@@ -26,6 +26,7 @@ Example (mirrors the README full-pipeline block):
     --clean-out src/data/Kuhn_Poker/output/kuhn_prefs_clean.json \\
     --plot src/data/Kuhn_Poker/output/pref_graph.png \\
     --prefix-prefs-out src/data/Kuhn_Poker/output/prefix_preferences.json \\
+    --prefix-plot src/data/Kuhn_Poker/output/prefix_pref_graph.png \\
     --verbose
 """
 
@@ -203,6 +204,11 @@ def step4_prefix_preferences(args, traces: list, clean_prefs: list) -> list:
     else:
         print(f"[run] Step 4 done — {len(prefix_prefs['pairs'])} pairs (no output file specified)")
 
+    if args.prefix_plot:
+        enricher = _load_enricher(args.enrich)
+        os.makedirs(os.path.dirname(os.path.abspath(args.prefix_plot)), exist_ok=True)
+        _viz.plot_prefix_graph(prefix_prefs, args.prefix_plot, enricher=enricher)
+
     return prefix_prefs
 
 
@@ -264,6 +270,8 @@ def build_parser() -> argparse.ArgumentParser:
     g4 = p.add_argument_group("Step 4 — Preference power set")
     g4.add_argument("--prefix-prefs-out", default="data/Kuhn_Poker/output/prefix_preferences.json",
                     help="Output path for prefix pairwise preferences (.json).")
+    g4.add_argument("--prefix-plot", default=None,
+                    help="Save prefix preference ordering graph as PNG to this path.")
     g4.add_argument("--skip-prefix-prefs", action="store_true",
                     help="Skip Step 4 entirely.")
 
