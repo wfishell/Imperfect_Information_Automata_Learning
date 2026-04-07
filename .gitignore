@@ -6,5 +6,5 @@ __pycache__
 .env
 
 # Generated pipeline artifacts
-corpus.json
-cache.json
+src/data/Kuhn_Poker/input/*
+src/data/Kuhn_Poker/output/*
