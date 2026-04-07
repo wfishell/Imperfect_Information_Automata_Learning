@@ -176,16 +176,19 @@ def step4_prefix_preferences(args, traces: list, clean_prefs: list) -> list:
     import time
     print(f"[run] Step 4 — building preference power set over trace prefixes ...")
 
+    # Traces from step 1 are semicolon-delimited strings; split into step lists
+    parsed_traces = [t.strip().split(";") for t in traces]
+
     t0 = time.time()
-    G = _pps.build_graph(traces)
+    G = _pps.build_graph(parsed_traces)
     print(f"[run] Step 4   graph built          ({time.time()-t0:.2f}s)")
 
     t1 = time.time()
-    trace_ranks = _pps.build_trace_ranks(clean_prefs, len(traces))
+    trace_ranks = _pps.build_trace_ranks(clean_prefs, len(parsed_traces))
     print(f"[run] Step 4   trace ranks computed ({time.time()-t1:.2f}s)")
 
     t2 = time.time()
-    prefix_prefs = _pps.compute_prefix_preferences(G, traces, trace_ranks)
+    prefix_prefs = _pps.compute_prefix_preferences(G, parsed_traces, trace_ranks)
     print(f"[run] Step 4   pairs computed       ({time.time()-t2:.2f}s)  "
           f"{len(prefix_prefs['prefixes'])} prefixes, {len(prefix_prefs['pairs'])} pairs")
 
