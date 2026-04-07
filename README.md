@@ -8,6 +8,66 @@ git clone https://github.com/eric-hsiung/REMAP.git
 
 # Current Work - Christian: Monday. 
 
+## Running the Full Pipeline — `src/run.py`
+
+`run.py` orchestrates all four steps (trace generation → preference elicitation → consistency checking → prefix preference power set) in a single command.
+
+```bash
+python src/run.py \
+  src/data/Kuhn_Poker/input/kuhn_poker.dot \
+  --fmt dot \
+  --aps a0,a1,a2,bs,c1hi,c1lo,c2hi,c2lo,cur_bet,deal,m1b0,m1b1,m1b2,m2b0,m2b1,m2b2,p1,p1b,p2b,p2c,p2r \
+  --num 10 --length 8 \
+  --traces-out src/data/Kuhn_Poker/output/kuhn_traces.txt \
+  --prompt "You are evaluating a Kuhn Poker player. Prefer traces where the player bluffs with low cards and value-bets with high cards. Penalize passive play or over-bluffing." \
+  --model claude-haiku-4-5-20251001 \
+  --K 50 --enrich kuhn_poker --chunk-delay 10 \
+  --prefs-out src/data/Kuhn_Poker/output/kuhn_prefs.json \
+  --max-rounds 3 \
+  --clean-out src/data/Kuhn_Poker/output/kuhn_prefs_clean.json \
+  --plot src/data/Kuhn_Poker/output/pref_graph.png \
+  --prefix-prefs-out src/data/Kuhn_Poker/output/prefix_preferences.json \
+  --prefix-plot src/data/Kuhn_Poker/output/prefix_pref_graph.png \
+  --verbose
+```
+
+### Arguments
+
+| Flag | Description |
+|---|---|
+| `dot` (positional) | Path to automaton file (DOT or JSON) |
+| `--fmt` | `dot` or `json` |
+| `--aps` | Comma-separated atomic propositions in fixed order |
+| `--num` / `--length` | Number of traces / steps per trace |
+| `--traces-out` | Output path for generated traces (`.txt`) |
+| `--skip-traces` | Skip Step 1 if `--traces-out` already exists |
+| `--prompt` | System prompt string or path to a `.txt` file |
+| `--model` | Anthropic model ID (default: `claude-haiku-4-5-20251001`) |
+| `--K` | Pairs per LLM chunk (default: 50) |
+| `--enrich` | `kuhn_poker` — enriches APs into readable game descriptions before sending to LLM |
+| `--chunk-delay` | Seconds between LLM chunks to avoid rate limits |
+| `--prefs-out` | Output path for raw pairwise preferences (`.json`) |
+| `--skip-prefs` | Skip Step 2 if `--prefs-out` already exists |
+| `--max-rounds` | Max LLM re-query rounds for cycle resolution (default: 3) |
+| `--clean-out` | Output path for cleaned preferences after consistency check (`.json`) |
+| `--plot` | Save trace preference ordering graph as PNG |
+| `--prefix-prefs-out` | Output path for prefix pairwise preferences (`.json`) |
+| `--prefix-plot` | Save prefix preference ordering graph as PNG |
+| `--skip-prefix-prefs` | Skip Step 4 entirely |
+| `--verbose` | Print step-by-step progress |
+
+### Example Output Graphs
+
+**Trace Preference Ordering** — each node is a generated trace; green nodes are most preferred, red are least preferred; edges point from more to less preferred; red dashed edges are MFAS cycle-breaking edges.
+
+![Trace Preference Ordering](docs/images/pref_graph.png)
+
+**Prefix Preference Ordering** — same layout over all unique trace prefixes; nodes at the same level have equal expected rank (see note below).
+
+![Prefix Preference Ordering](docs/images/prefix_pref_graph.png)
+
+> **Note on same-level prefixes:** Prefix preference is derived from *expected rank* — the mean rank of all full traces reachable from that prefix. Many prefixes end up on the same level because they lead to the same set of future traces (common game states before the first branch) or because the small number of traces produces a coarse rank distribution with many ties. This is a genuine partial order, not a total order. A richer comparison (e.g. stochastic dominance over the rank distribution) would resolve more of these ties.
+
 
 # Current Work - Will: Thursday & Friday, April 2nd and #rd
 Built out the updated Kuhn Poker tlsf file, Consistency checker, semantics python files and preference elicitor. Essentially the Kuhn poker  tlsf file needs to be synthesized. The correct Dot and HOA are on this branch. The preference_elicitory.py takes in a text file of traces generated from the dot_trace_generator.py file and a prompt and compares them given some model. These are then outputted as a prefs.json file. The consitency_checker.py which constructs a graph and checks for cycles and then repreferences  using the LLM.
