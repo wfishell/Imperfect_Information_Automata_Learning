@@ -19,18 +19,19 @@ Steps
 
 Output format (mirrors the input pref format)
 ---------------------------------------------
-[
-  {
-    "i":       <int>,          # index of prefix i in the enumerated prefix list
-    "j":       <int>,          # index of prefix j
-    "pref":    1 | -1 | 0,    # 1 = i preferred, -1 = j preferred, 0 = indifferent
-    "subtrace_i": <str>,       # full subtrace as ;-separated steps
-    "subtrace_j": <str>,
-    "er_i":    <float>,        # expected rank of prefix i (lower = better)
-    "er_j":    <float>
-  },
-  ...
-]
+{
+  "prefixes": [<str>, ...],   # index -> full subtrace as ;-separated steps (START excluded)
+  "pairs": [
+    {
+      "i":    <int>,           # index into "prefixes"
+      "j":    <int>,
+      "pref": 1 | -1 | 0,     # 1 = i preferred, -1 = j preferred, 0 = indifferent
+      "er_i": <float>,         # expected rank of prefix i (lower = better)
+      "er_j": <float>
+    },
+    ...
+  ]
+}
 """
 
 import json
@@ -281,48 +282,44 @@ def compute_prefix_preferences(
         pref = -1  if E[rank(P_i)] > E[rank(P_j)]   (P_j preferred)
         pref =  0  if E[rank(P_i)] == E[rank(P_j)]  (indifferent / tied)
 
-    Returns a list of dicts matching the output schema described at the top.
+    Returns a dict with:
+        "prefixes" -- list of subtrace strings (index -> subtrace), START excluded
+        "pairs"    -- list of compact {i, j, pref, er_i, er_j} dicts
     """
     prefixes = enumerate_prefixes(traces)
 
-    # Pre-compute expected rank for every prefix
-    er: dict = {}
-    label: dict = {}
-    for p in prefixes:
+    # Only use real game prefixes (depth >= 1); exclude the virtual START node
+    real_prefixes = [p for p in prefixes if len(p) > 1]
+
+    # Pre-compute expected rank for every real prefix (keyed by position in real_prefixes)
+    subtrace_strings = [_prefix_label(p) for p in real_prefixes]
+    er_values = []
+    for p in real_prefixes:
         future_trace_ids = futures_of_prefix(G, p)
         future_ranks     = frozenset(trace_ranks[t] for t in future_trace_ids)
-        er[p]    = expected_rank(future_ranks)
-        label[p] = _prefix_label(p)
+        er_values.append(expected_rank(future_ranks))
 
-    # Only compare real game prefixes (depth >= 1); exclude the virtual START node
-    real_prefixes = [(idx, p) for idx, p in enumerate(prefixes) if len(p) > 1]
-
-    # Enumerate all pairs
-    results = []
-    for a in range(len(real_prefixes)):
-        for b in range(a + 1, len(real_prefixes)):
-            i, pi = real_prefixes[a]
-            j, pj = real_prefixes[b]
-            ei, ej = er[pi], er[pj]
-
+    # Enumerate all pairs — compact dicts, no repeated subtrace strings
+    pairs = []
+    n = len(real_prefixes)
+    for a in range(n):
+        for b in range(a + 1, n):
+            ei, ej = er_values[a], er_values[b]
             if ei < ej:
                 pref = 1
             elif ei > ej:
                 pref = -1
             else:
                 pref = 0
-
-            results.append({
-                "i":          i,
-                "j":          j,
-                "pref":       pref,
-                "subtrace_i": label[pi],
-                "subtrace_j": label[pj],
-                "er_i":       ei if ei != float("inf") else None,
-                "er_j":       ej if ej != float("inf") else None,
+            pairs.append({
+                "i":    a,
+                "j":    b,
+                "pref": pref,
+                "er_i": ei if ei != float("inf") else None,
+                "er_j": ej if ej != float("inf") else None,
             })
 
-    return results
+    return {"prefixes": subtrace_strings, "pairs": pairs}
 
 
 # ---------------------------------------------------------------------------
@@ -349,12 +346,11 @@ if __name__ == "__main__":
         print(f"  trace {t:>2}  rank {trace_ranks[t]}")
 
     # 4. Compute prefix preferences
-    prefix_prefs = compute_prefix_preferences(G, traces, trace_ranks)
-    n_prefixes   = len(set(r["i"] for r in prefix_prefs) | set(r["j"] for r in prefix_prefs)) + 1
-    print(f"\nPrefixes enumerated : {n_prefixes}")
-    print(f"Prefix pref pairs   : {len(prefix_prefs)}")
+    result = compute_prefix_preferences(G, traces, trace_ranks)
+    print(f"\nPrefixes enumerated : {len(result['prefixes'])}")
+    print(f"Prefix pref pairs   : {len(result['pairs'])}")
 
-    # 5. Write output
+    # 5. Write output (compact JSON — subtrace strings live in the index, not every pair)
     with open(OUTPUT_PATH, "w") as f:
-        json.dump(prefix_prefs, f, indent=2)
+        json.dump(result, f)
     print(f"\nOutput written -> {OUTPUT_PATH}")

@@ -173,19 +173,31 @@ def step3_check_consistency(args, prefs: list, traces: list) -> list:
 
 def step4_prefix_preferences(args, traces: list, clean_prefs: list) -> list:
     """Returns pairwise prefix preference list."""
+    import time
     print(f"[run] Step 4 — building preference power set over trace prefixes ...")
 
-    G           = _pps.build_graph(traces)
+    t0 = time.time()
+    G = _pps.build_graph(traces)
+    print(f"[run] Step 4   graph built          ({time.time()-t0:.2f}s)")
+
+    t1 = time.time()
     trace_ranks = _pps.build_trace_ranks(clean_prefs, len(traces))
+    print(f"[run] Step 4   trace ranks computed ({time.time()-t1:.2f}s)")
+
+    t2 = time.time()
     prefix_prefs = _pps.compute_prefix_preferences(G, traces, trace_ranks)
+    print(f"[run] Step 4   pairs computed       ({time.time()-t2:.2f}s)  "
+          f"{len(prefix_prefs['prefixes'])} prefixes, {len(prefix_prefs['pairs'])} pairs")
 
     if args.prefix_prefs_out:
+        t3 = time.time()
         os.makedirs(os.path.dirname(os.path.abspath(args.prefix_prefs_out)), exist_ok=True)
         with open(args.prefix_prefs_out, "w") as f:
-            json.dump(prefix_prefs, f, indent=2)
-        print(f"[run] Step 4 done — saved {len(prefix_prefs)} prefix preferences to {args.prefix_prefs_out}")
+            json.dump(prefix_prefs, f)
+        print(f"[run] Step 4   written to disk      ({time.time()-t3:.2f}s)  -> {args.prefix_prefs_out}")
+        print(f"[run] Step 4 done (total {time.time()-t0:.2f}s)")
     else:
-        print(f"[run] Step 4 done — {len(prefix_prefs)} prefix preferences (no output file specified)")
+        print(f"[run] Step 4 done — {len(prefix_prefs['pairs'])} pairs (no output file specified)")
 
     return prefix_prefs
 
@@ -213,7 +225,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="Steps per trace.")
     g1.add_argument("--cycle", action="store_true",
                     help="Append cycle{1} to each trace.")
-    g1.add_argument("--traces-out", default="data/kuhn_poker/kuhn_traces.txt",
+    g1.add_argument("--traces-out", default="data/Kuhn_Poker/output/kuhn_traces.txt",
                     help="Output path for generated traces (.txt).")
     g1.add_argument("--skip-traces", action="store_true",
                     help="Skip Step 1 if --traces-out already exists.")
@@ -230,7 +242,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="Enrich traces with human-readable descriptions before sending to LLM.")
     g2.add_argument("--chunk-delay", type=float, default=10.0,
                     help="Seconds between LLM chunks to avoid rate limits.")
-    g2.add_argument("--prefs-out", default="data/kuhn_poker/kuhn_prefs.json",
+    g2.add_argument("--prefs-out", default="data/Kuhn_Poker/output/kuhn_prefs.json",
                     help="Output path for raw preferences (.json).")
     g2.add_argument("--skip-prefs", action="store_true",
                     help="Skip Step 2 if --prefs-out already exists.")
@@ -239,15 +251,17 @@ def build_parser() -> argparse.ArgumentParser:
     g3 = p.add_argument_group("Step 3 — Consistency checking")
     g3.add_argument("--max-rounds", type=int, default=3,
                     help="Max LLM re-query rounds before dropping cycle edges.")
-    g3.add_argument("--clean-out", default="data/kuhn_poker/kuhn_prefs_clean.json",
+    g3.add_argument("--clean-out", default="data/Kuhn_Poker/output/kuhn_prefs_clean.json",
                     help="Output path for cleaned preferences (.json).")
     g3.add_argument("--plot", default=None,
                     help="Save preference graph as PNG to this path.")
 
     # ── Step 4: preference power set ────────────────────────────────────────
     g4 = p.add_argument_group("Step 4 — Preference power set")
-    g4.add_argument("--prefix-prefs-out", default="data/kuhn_poker/prefix_preferences.json",
+    g4.add_argument("--prefix-prefs-out", default="data/Kuhn_Poker/output/prefix_preferences.json",
                     help="Output path for prefix pairwise preferences (.json).")
+    g4.add_argument("--skip-prefix-prefs", action="store_true",
+                    help="Skip Step 4 entirely.")
 
     # ── General ─────────────────────────────────────────────────────────────
     p.add_argument("--verbose", action="store_true", help="Print progress to stderr.")
@@ -262,7 +276,8 @@ def main():
     traces      = step1_generate_traces(args)
     prefs       = step2_elicit_preferences(args, traces)
     clean_prefs = step3_check_consistency(args, prefs, traces)
-    step4_prefix_preferences(args, traces, clean_prefs)
+    if not args.skip_prefix_prefs:
+        step4_prefix_preferences(args, traces, clean_prefs)
 
 
 if __name__ == "__main__":

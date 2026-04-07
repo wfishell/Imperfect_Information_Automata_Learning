@@ -42,7 +42,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))               # test/pipeline
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(_HERE))) # project root
 _SRC  = os.path.join(_ROOT, "src")
 
-CORPUS_PATH = os.path.join(_SRC, "data", "Kuhn_Poker", "corpus.json")
+CORPUS_PATH = os.path.join(_SRC, "data", "Kuhn_Poker", "output", "corpus.json")
 
 # Virtual source node that every trace path originates from
 START = "__START__"
