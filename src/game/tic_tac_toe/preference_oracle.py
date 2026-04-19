@@ -1,6 +1,6 @@
 from __future__ import annotations
 from src.game.tic_tac_toe.game_nfa import TicTacToeNFA
-from src.game.tic_tac_toe.board import TicTacToeState
+from src.game.tic_tac_toe.board import TicTacToeState, LINES, EMPTY, X, O
 
 
 class TicTacToeOracle:
@@ -52,7 +52,7 @@ class TicTacToeOracle:
         if state.is_terminal():
             result = state.value
         elif depth == 0:
-            result = 0                           # horizon cutoff — unknown, treat as draw
+            result = self._heuristic(state.board)
         elif state.player == 'P2':
             next_depth = None if depth is None else depth - 1
             result = max(self._minimax(child, next_depth) for child in state.children.values())
@@ -62,3 +62,32 @@ class TicTacToeOracle:
 
         self._cache[key] = result
         return result
+
+    @staticmethod
+    def _heuristic(board: tuple) -> float:
+        """
+        Weighted open-lines heuristic from O's perspective.
+
+        For each of the 8 lines, if it contains only O pieces (and empties),
+        its contribution is (O_pieces_in_line / 3).  If it contains only X
+        pieces (and empties), that same weight is subtracted.  Mixed lines
+        (both X and O) are dead and contribute nothing.
+
+        The raw score is normalised by the maximum possible value (8 * 1.0 = 8)
+        so the result stays in (-1, 1), consistent with terminal values ±1.
+        """
+        o_score = 0.0
+        x_score = 0.0
+
+        for a, b, c in LINES:
+            cells = (board[a], board[b], board[c])
+            has_x = X in cells
+            has_o = O in cells
+
+            if has_o and not has_x:
+                o_score += cells.count(O) / 3.0
+            elif has_x and not has_o:
+                x_score += cells.count(X) / 3.0
+
+        max_score = len(LINES)   # 8 lines × max weight 1.0
+        return (o_score - x_score) / max_score
