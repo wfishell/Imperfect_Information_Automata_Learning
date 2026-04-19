@@ -2,20 +2,20 @@
 Main entry point: learn P2's strategy automaton for a random minimax game.
 
 Usage:
-    python learner.py 4              # depth-4 game, default settings
-    python learner.py 4 --seed 42 --depth-n 2 --K 100 --verbose
+    python -m src.scripts.learner 4
+    python -m src.scripts.learner 4 --seed 42 --depth-n 2 --K 100 --verbose
 """
 
 import argparse
 from aalpy.learning_algs import run_Lstar
 from aalpy.utils import visualize_automaton
 
-from game_generator import generate_tree, print_tree, compute_trace_scores
-from game_nfa import GameNFA
-from preference_oracle import PreferenceOracle
-from game_sul import GameSUL
-from table_b import TableB
-from mcts_oracle import MCTSEquivalenceOracle
+from src.game.game_generator import generate_tree, print_tree, compute_trace_scores
+from src.game.game_nfa import GameNFA
+from src.lstar_mcts.preference_oracle import PreferenceOracle
+from src.lstar_mcts.game_sul import GameSUL
+from src.lstar_mcts.table_b import TableB
+from src.lstar_mcts.mcts_oracle import MCTSEquivalenceOracle
 
 
 def main():
@@ -137,7 +137,7 @@ def evaluate(model, root) -> dict:
 
     Returns mean scores and a normalised quality in [0, 1].
     """
-    from game_generator import GameNode
+    from src.game.game_generator import GameNode
     import random as rng
 
     nfa = GameNFA(root)

@@ -27,10 +27,10 @@ from __future__ import annotations
 import random
 from aalpy.base import Oracle
 
-from game_nfa import GameNFA
-from preference_oracle import PreferenceOracle
-from game_sul import GameSUL
-from table_b import TableB
+from src.game.game_nfa import GameNFA
+from src.lstar_mcts.preference_oracle import PreferenceOracle
+from src.lstar_mcts.game_sul import GameSUL
+from src.lstar_mcts.table_b import TableB
 
 
 class MCTSEquivalenceOracle(Oracle):
@@ -77,7 +77,7 @@ class MCTSEquivalenceOracle(Oracle):
         solve for consistent numeric values, then compare means.
         If mean(dev) > mean(shadow) + epsilon, accept as counterexample.
         """
-        from smt_solver import SMTValueAssigner
+        from src.lstar_mcts.smt_solver import SMTValueAssigner
 
         b_leaves = [l for leaves in self._deviation_leaves.values() for l in leaves]
         if not b_leaves:

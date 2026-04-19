@@ -11,7 +11,7 @@ No numeric scores are ever returned.  The SMT solver (elsewhere) derives
 consistent numeric assignments from the collected pairwise orderings.
 """
 
-from game_nfa import GameNFA
+from src.game.game_nfa import GameNFA
 
 
 class PreferenceOracle:
@@ -73,7 +73,8 @@ class PreferenceOracle:
 
 if __name__ == '__main__':
     import sys
-    from game_generator import generate_tree, print_tree, compute_trace_scores
+    from src.game.game_generator import generate_tree, print_tree, compute_trace_scores
+    from src.game.game_nfa import GameNFA
 
     depth = int(sys.argv[1]) if len(sys.argv) > 1 else 4
     seed  = int(sys.argv[2]) if len(sys.argv) > 2 else 42

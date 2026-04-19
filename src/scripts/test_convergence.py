@@ -23,13 +23,13 @@ import numpy as np
 
 from aalpy.learning_algs import run_Lstar
 
-from game_generator import generate_tree
-from game_nfa import GameNFA
-from preference_oracle import PreferenceOracle
-from game_sul import GameSUL
-from table_b import TableB
-from mcts_oracle import MCTSEquivalenceOracle
-from learner import evaluate
+from src.game.game_generator import generate_tree
+from src.game.game_nfa import GameNFA
+from src.lstar_mcts.preference_oracle import PreferenceOracle
+from src.lstar_mcts.game_sul import GameSUL
+from src.lstar_mcts.table_b import TableB
+from src.lstar_mcts.mcts_oracle import MCTSEquivalenceOracle
+from src.scripts.learner import evaluate
 
 
 # -----------------------------------------------------------------------

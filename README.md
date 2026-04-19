@@ -1,454 +1,350 @@
-Git clone remap repo into local project s.t. you can run code such as LLM teacher. Need an antrhopic API key, can send you mine or push a hidden version here, but don't think we should be doing it this way personally.
+# Preference-Guided Automata Learning with MCTS Equivalence Querying
 
-git clone https://github.com/eric-hsiung/REMAP.git
-## TODO
-1. Get preference querying working for Kuhn Poker with perfect information game working. Currently have an HOA and TLSF file for Kuhn poker. Can use dot_trace_generator.py to generate a lot of traces of games for data gen
-2. Need to figure out if REMAP training data intake works as I think it does.
-3. Once we get reward machine LLM working we can go onto step two of L* modification
-# Current Work - Will: Thursday & Friday, April 2nd and #rd
-Built out the updated Kuhn Poker tlsf file, Consistency checker, semantics python files and preference elicitor. Essentially the Kuhn poker  tlsf file needs to be synthesized. The correct Dot and HOA are on this branch. The preference_elicitory.py takes in a text file of traces generated from the dot_trace_generator.py file and a prompt and compares them given some model. These are then outputted as a prefs.json file. The consitency_checker.py which constructs a graph and checks for cycles and then repreferences  using the LLM.
+## Project Description
 
-## How to run
+This project develops an automata learning algorithm for strategy synthesis in imperfect-information games. The goal is to learn a finite automaton encoding the system's (P2's) optimal response strategy across all possible environment (P1) inputs.
 
-### Step 1 — Generate traces from the automaton
+**P1 is the environment**: provides inputs to the system. We make no assumptions about P1 and treat all possible P1 inputs as equally valid. P1 is not optimised — it is enumerated.
 
-```bash
-python src/dot_trace_generator.py \
-  src/data/Kuhn_Poker/kuhn_poker.dot \
-  --fmt dot \
-  --aps a0,a1,a2,bs,c1hi,c1lo,c2hi,c2lo,cur_bet,deal,m1b0,m1b1,m1b2,m2b0,m2b1,m2b2,p1,p1b,p2b,p2c,p2r \
-  --num 10 \
-  --length 8 \
-  --out data/kuhn_poker/kuhn_traces.txt
+**P2 is the system**: produces outputs in response to P1's inputs. This is what we are learning. The automaton maps P1's input history to P2's best response at each step.
+
+The algorithm extends L* with two key ideas:
+
+1. **A history-conditioned preference oracle** that evaluates candidate P2 responses by looking back across the full trace seen so far, assigning local preferences that are globally consistent over all explored traces.
+
+2. **An MCTS-based equivalence oracle** that searches for P1 input sequences where P2's current strategy is suboptimal — cases where an alternative P2 response leads to better aggregate outcomes across all P1 continuations.
+
+### The Two Observation Tables
+
+**Table A** — the current strategy hypothesis. Membership queries always return the max-preference P2 response at each prefix (greedy with respect to the oracle). Maps P1 input histories to P2's recommended response.
+
+**Table B** — the exploration record. Stores all visited branches with their visit counts and SMT-derived preference values. Represents the partial game tree explored so far, including alternative P2 responses to what Table A currently prescribes.
+
+### Preference Representation
+
+Preferences are generated locally at each step as pairwise orderings over (input, output) pairs: `t1 > t2`. The oracle conditions its preference on the full trace history to that point. An SMT solver derives consistent numeric values from the collected pairwise orderings at each depth level, enabling comparison and aggregation. Values are normalized within each depth level — scores at depth k are comparable to each other but not to depth k+1.
+
+### Variable-Length Games
+
+Games may end at different depths depending on how they are played. Terminal states are modeled as absorbing sink states in the automaton — any extension of a terminal trace maps to the same sink, satisfying the L* closedness condition automatically for those rows.
+
+Terminal payoffs are treated as **depth-independent**: a payoff of 80 at depth 4 and a payoff of 80 at depth 8 are directly comparable. This is the standard minimax assumption — outcomes have inherent value regardless of how many moves it took to reach them. Terminal payoffs are recorded raw and skip the within-depth normalization applied to intermediate state preferences.
+
+MCTS rollouts terminate early on reaching a terminal state rather than forcing to depth N. Discounting terminal payoffs by depth (preferring faster wins) is a future extension.
+
+### MCTS Tree Search as Contextual Bandits with Regret
+
+The MCTS search is formalized as a contextual bandit problem. The context at each node is the trace prefix σ leading to that node. The reward is the SMT-derived preference value of the resulting trace at depth N.
+
+The algorithm minimizes cumulative regret over P2's choices. Known preferences over already-explored P2 responses directly inform which unexplored responses are worth visiting next — an unexplored P2 response adjacent to high-preference explored ones gets a higher prior and is visited sooner.
+
+#### Asymmetric Traversal: P1 vs P2 Nodes
+
+The traversal is fundamentally different at P1 and P2 nodes:
+
+**At P1 nodes (environment inputs):** P1 is not optimised. UCB is used purely for *coverage* — to ensure that across K rollouts, all P1 inputs get visited. This is not strategic selection; it is exploration to ensure no P1 input sequence is neglected.
+
+```
+UCB_coverage(σ, a) = c * sqrt(log(total_visits(σ)) / visits(σ, a)) * α^(-depth(σ))
 ```
 
-| Argument | Description |
-|---|---|
-| `file` (positional) | Path to automaton — JSON or DOT |
-| `--fmt` | `json` or `dot` |
-| `--aps` | Comma-separated APs in a fixed order |
-| `-n / --num` | Number of traces to generate (default: 5) |
-| `-l / --length` | Steps per trace (default: 10) |
-| `--cycle` | Append `cycle{1}` to each trace |
-| `--out` | Output `.txt` path; omit to print to stdout |
+**At P2 nodes (system responses):** P2 choices are explored probabilistically, not greedily. A softmax over SMT values is used, with unexplored actions assigned a high prior (they have unknown value and deserve exploration). As more P2 responses are explored and SMT values are assigned, the probability mass concentrates toward higher-value responses while maintaining exploration of uncertain regions.
+
+```
+P(P2 chooses a at σ) ∝ exp(SMT_value(σ, a) / τ)   for explored actions
+P(P2 chooses a at σ) = high_prior                    for unexplored actions
+```
+
+Where τ is a temperature parameter controlling exploitation vs exploration.
+
+This asymmetry is intentional: we want coverage of all P1 inputs (because any of them could be played) but we want intelligent, value-guided exploration of P2 responses (because we are learning the best one).
+
+#### Zero-Probability Pruning at Depth N
+
+After collecting SMT values for all explored leaves at depth N, any leaf whose value falls below the median of all explored leaves at depth N is assigned probability 0 in Table B. This node is never selected again. The assumption is that if a P2 response leads to below-median outcomes across the explored P1 continuations, it is not worth further exploration.
+
+#### Mid-Exploration Pruning
+
+When following a deviation from Table A (a P2 response different from what Table A prescribes), check at each intermediate depth d whether the exploration should continue:
+
+- Collect all traces explored so far within this deviation subtree at depth d
+- Compute the fraction that are less preferred than Table A's traces at depth d (using current SMT values)
+- If this fraction exceeds 0.5 (majority below Table A), scale the remaining budget for this subtree by `(1 - fraction_below)`
+- If the remaining budget falls below a minimum threshold, abandon this subtree entirely and redirect budget elsewhere
+
+This is pessimistic pruning: if the evidence already points against a subtree being a counterexample at an intermediate depth, do not wait until depth N to find out. The freed budget is redistributed to other unexplored deviation subtrees.
+
+Together, mid-exploration pruning and depth-N zero-probability pruning form a layered system: gentle proportional budget reduction at intermediate depths, hard elimination at depth N.
+
+**Fixed search budget**: every equivalence query receives exactly K MCTS rollouts total. K is a configurable parameter that directly controls quality vs cost.
+
+### Counterexample Detection and Acceptance
+
+Within the K-rollout budget, MCTS explores alternative subtrees — branches where P1 deviates from Table A's current choice at some depth k — down to depth N. After the budget is exhausted:
+
+- Collect all leaves at depth N for the alternative subtree and Table A's subtree
+- Assign SMT values to all leaves from the pairwise preference ordering at depth N
+- Compute mean value uniformly over all explored P2 responses in each subtree
+- Accept counterexample if: `mean(alternative) > mean(table_A) + ε`
+
+No assumption is made about how P2 plays — all P2 responses are weighted equally. The ε threshold guards against committing to an update when the preference ordering at depth N is still too sparse to be stable.
+
+### Table B Update — Regardless of Counterexample
+
+**Table B is updated on every equivalence query**, whether or not a counterexample is found. Each rollout adds:
+
+- Incremented visit counts on all nodes along the rollout path
+- Updated value estimates via backpropagation
+- New pairwise preferences at depth N, fed back to the SMT solver
+- Updated SMT values across the depth N leaves (re-solved incrementally)
+- New zero-probability assignments for leaves falling below the median
+
+This means the MCTS tree accumulates information continuously. Later equivalence queries benefit from all prior exploration, focusing budget on regions not yet pruned and not yet well-understood.
+
+### Language Closure After Update
+
+When Table A is updated at branching point k, the algorithm explores all P2 responses from k+1 onward on the new branch. This closes the observation table under the full language — the learned automaton must encode P1's strategy for every possible P2 continuation, not just the one MCTS happened to find.
 
 ---
 
-### Step 2 — Elicit pairwise preferences with a player-evaluation prompt
+## Implementation Steps
 
-```bash
-python src/preference_elicitor.py \
-  data/kuhn_poker/kuhn_traces.txt \
-  --prompt "You are evaluating a Kuhn Poker player. \
-Prefer traces where the player bluffs with low cards and value-bets with high cards. \
-Penalize passive play (always checking) or over-bluffing." \
-  --model claude-haiku-4-5-20251001 \
-  --K 50 \
-  --enrich kuhn_poker \
-  --chunk-delay 10 \
-  --output data/kuhn_poker/kuhn_prefs.json \
-  --verbose
+### Step 1: Random Minimax Game Generator
+- Generate random two-player zero-sum game trees with configurable branching factor and depth
+- Each node stores available actions for the current player
+- Leaf nodes have numeric payoff values
+- Export game trees in a format compatible with the NFA and oracle interfaces
+
+### Step 2: Preference Oracle
+- Implement a history-conditioned preference oracle
+- Input: full trace to current node + two candidate next actions
+- Output: pairwise preference ordering `a > b`
+- Oracle evaluates by simulating forward from each candidate and comparing resulting subtree values
+- Must be consistent: if `a > b` and `b > c` then `a > c`
+
+### Step 3: SMT Value Assignment
+- Collect pairwise preferences at each depth level across all explored traces
+- Use an SMT solver (Z3) to find a consistent numeric assignment satisfying all ordering constraints
+- Normalize values within each depth level
+- Re-solve incrementally as new preferences are added
+
+### Step 4: Table B — Exploration Tree
+- Implement as a trie indexed by trace prefix
+- Each node stores: visit count, current SMT value, set of explored actions, set of unexplored actions, zero-probability flag
+- Support UCB score computation per node with depth discounting:
+  ```
+  UCB(σ, a) = value(σ, a) + c * sqrt(log(total_visits(σ)) / visits(σ, a)) * α^(-depth(σ))
+  ```
+- Unexplored actions always score higher than explored ones (forced first visit)
+- Zero-probability nodes are excluded from UCB selection permanently
+
+### Step 5: MCTS Counterexample Search — Explicit Algorithm
+
+Each equivalence query runs exactly K rollouts. The algorithm returns the best counterexample found, or None.
+
+```
+MCTS_EQUIVALENCE_QUERY(Table_A, Table_B, K, N, ε, τ, budget_threshold):
+
+  remaining_budget ← dict()   // per deviation subtree
+
+  for rollout = 1 to K:
+
+    // --- SELECTION ---
+    node ← root
+    path ← []
+    active_deviation ← None
+
+    while depth(node) < N and not terminal(node):
+
+      if is_P1_node(node):
+        // Environment: UCB for coverage, skip zero-probability nodes
+        a ← argmax_{a: not zero_prob(node,a)} [
+              c * sqrt(log(visits(node)) / visits(node, a)) * α^(-depth(node))
+            ]
+
+      else:  // P2 node
+        table_a_action ← Table_A.lookup(path)
+
+        // Probabilistic P2 selection
+        // Unexplored actions get high prior; explored get softmax over SMT values
+        probs ← {}
+        for a in actions(node):
+          if visits(node, a) == 0:
+            probs[a] ← HIGH_PRIOR
+          else:
+            probs[a] ← exp(SMT.value(node, a) / τ)
+        normalise(probs)
+        a ← sample(probs)
+
+        if a ≠ table_a_action and active_deviation is None:
+          active_deviation ← (node, a)
+          remaining_budget[active_deviation] ← remaining_budget.get(
+                                                 active_deviation, K)
+
+      path.append((node, a))
+      node ← transition(node, a)
+
+      // --- MID-EXPLORATION PRUNING ---
+      if active_deviation is not None:
+        d ← depth(node)
+        subtree_traces ← Table_B.traces_in_subtree(active_deviation, depth=d)
+
+        if len(subtree_traces) > 0:
+          table_a_mean ← mean(SMT.value(t)
+                              for t in Table_A.traces_at_depth(d))
+          fraction_below ← count(SMT.value(t) < table_a_mean
+                                  for t in subtree_traces) / len(subtree_traces)
+
+          if fraction_below > 0.5:
+            remaining_budget[active_deviation] *= (1 - fraction_below)
+
+            if remaining_budget[active_deviation] < budget_threshold:
+              break  // abandon rollout, redirect budget
+
+    // --- EVALUATION ---
+    trace ← extract_trace(path)
+    reference ← Table_A.sample_trace_at_depth(depth(node))
+    ordering ← oracle.compare(trace, reference)
+    SMT.add_ordering(ordering)
+
+    // --- BACKPROPAGATION ---
+    smt_values ← SMT.solve()
+    for (node, a) in path:
+      Table_B.increment_visits(node, a)
+      Table_B.update_value(node, a, smt_values)
+
+  // --- DEPTH-N ZERO-PROBABILITY PRUNING ---
+  leaves ← Table_B.leaves_at_depth(N)
+  median_val ← median(SMT.value(l) for l in leaves)
+  for leaf in leaves:
+    if SMT.value(leaf) < median_val:
+      Table_B.set_zero_probability(leaf)
+
+  // --- COUNTEREXAMPLE DETECTION ---
+  best_ce ← None
+  best_advantage ← ε
+
+  for deviation in Table_B.all_deviation_points():
+    alt_leaves ← Table_B.leaves_in_subtree(deviation, depth=N)
+    alt_leaves ← [l for l in alt_leaves if not zero_prob(l)]
+    if len(alt_leaves) == 0: continue
+
+    alt_mean ← mean(SMT.value(l) for l in alt_leaves)
+    ta_mean  ← mean(SMT.value(l)
+                    for l in Table_A.corresponding_leaves(deviation, depth=N))
+
+    if alt_mean - ta_mean > best_advantage:
+      best_advantage ← alt_mean - ta_mean
+      best_ce ← deviation
+
+  return best_ce   // None if no deviation clears the ε threshold
 ```
 
-| Argument | Description |
-|---|---|
-| `traces` (positional) | `.txt` file of traces, one per line |
-| `--prompt` | System prompt string **or** path to a `.txt` file containing it |
-| `--model` | Anthropic model ID (default: `claude-haiku-4-5-20251001`) |
-| `--K` | Pairs per LLM chunk (default: 50) |
-| `--enrich` | `kuhn_poker` — translates APs to readable descriptions before sending to LLM |
-| `--chunk-delay` | Seconds between chunks to avoid rate limits (default: 10) |
-| `--output` | Path to write preferences JSON (default: `preferences.json`) |
-| `--verbose` | Print progress to stderr |
+### Step 6: Subtree Aggregate Comparison
 
-**Output JSON format** (`kuhn_prefs.json`):
-```json
-[
-  {"i": 0, "j": 1, "pref": 1,  "trace_i": "...", "trace_j": "..."},
-  {"i": 0, "j": 2, "pref": -1, "trace_i": "...", "trace_j": "..."}
-]
-```
-`pref = 1` → trace `i` preferred; `-1` → trace `j` preferred; `0` → indifferent.
+The counterexample detection (final block of the algorithm above) compares:
+
+- **Alternative subtree**: all non-zero-probability leaves at depth N reachable via the deviation P2 action, averaged uniformly over P1 continuations
+- **Table A subtree**: leaves at depth N from Table A's current P2 choice at the same branching point, averaged uniformly over P1 continuations
+
+All P1 inputs are weighted equally — no assumption is made about how P1 behaves. The deviation with the largest mean advantage above ε is returned as the counterexample. If none clears ε, the query returns None.
+
+### Step 7: Table A Update and Closure
+- On counterexample acceptance: update Table A at the branching point — P2 now takes the alternative action there
+- From the branching point onward, enumerate all P1 inputs on the new branch
+- For each P1 input continuation, run the greedy membership query to determine P2's best response
+- Add all resulting traces to the observation table
+- Re-run L* consistency and closedness checks
+
+### Step 8: Integration with L*
+- Plug the MCTS equivalence oracle into the L* loop as a drop-in replacement for random walk
+- Membership queries always run to a terminal game state (leaf node) — they are never truncated at depth N
+- Equivalence queries run exactly K MCTS rollouts to the current search depth N, returning a counterexample or None
+- Table B persists and accumulates across all equivalence queries and all depth levels — it is never reset
+- Termination: when Table A has not been updated for M consecutive equivalence queries **at the full game depth D**
+
+### Iterative Deepening
+
+The MCTS search depth N starts shallow and increases as the algorithm converges at each level. This prevents premature termination — the algorithm cannot conclude it has learned the game until it has reached the leaf nodes where terminal payoffs live.
+
+**The deepening schedule:**
+1. Run equivalence queries at depth N until M consecutive queries produce no Table A update
+2. Increase N (e.g. N ← N + 1 or N ← 2N)
+3. Resume equivalence queries — new counterexamples may appear at the deeper depth that were invisible before
+4. Repeat until N = D (full game depth) and M stable queries are achieved there
+
+**Why this is necessary:** if N is fixed below D, the preference oracle evaluates intermediate states rather than terminal outcomes. The algorithm can stabilize at M consecutive stable queries having never seen the end of any game — it has learned a partial strategy, not the full game. Iterative deepening ensures convergence is always grounded in complete traces.
+
+**Efficiency:** convergence at shallow depths is fast — the tree is small and K rollouts cover a large fraction of it. The earlier depth levels pre-populate Table B with useful structure before the expensive deep search begins. Each deepening step starts with a warm Table B rather than from scratch.
+
+**Membership queries are decoupled from N.** The search depth N is the MCTS horizon for equivalence queries only. Membership queries in L* always follow a trace to its terminal state regardless of N.
+
+### Convergence and Termination
+
+The termination signal — M consecutive equivalence queries at depth N=D without a Table A update — becomes strictly more meaningful as the algorithm progresses. This is not an arbitrary stopping rule: it reflects two compounding effects that emerge naturally from the search.
+
+**Effect 1: The live search space shrinks.**
+Zero-probability pruning permanently closes off depth-D leaves that fall below the median after each query. Over time, a growing fraction of the tree is marked dead. K rollouts now cover a higher fraction of the *remaining* live nodes, so the probability that a counterexample exists in the live space but was missed by K rollouts decreases monotonically.
+
+**Effect 2: Fewer counterexamples exist.**
+As Table A approaches the optimal strategy, the advantage gap `mean(alternative) - mean(table_A)` shrinks. Most alternative branches no longer clear the ε threshold. There are genuinely fewer counterexamples to find.
+
+These two effects compound: the search space is smaller *and* the target is harder to hit. M stable queries early in the run is weak evidence — the MCTS simply may not have reached the relevant parts of the tree yet. M stable queries late in the run, when most of the tree has been pruned and Table A has not changed in many iterations, is strong evidence that no ε-significant counterexample remains in the live search space.
+
+This gives the algorithm a PAC character: the effective probability δ of missing a valid counterexample decreases throughout the run as a function of pruning coverage and Table A stability. The user-facing parameters K, M, and ε together determine the confidence of the termination guarantee — larger K and M, and smaller ε, yield a tighter bound on the probability of stopping prematurely.
 
 ---
 
-### Step 3 — Check consistency and resolve preference cycles
+## Experiment Design
 
-```bash
-python src/consistency_checker.py \
-  data/kuhn_poker/kuhn_prefs.json \
-  data/kuhn_poker/kuhn_traces.txt \
-  --prompt "You are evaluating a Kuhn Poker player. \
-Prefer traces where the player bluffs with low cards and value-bets with high cards. \
-Penalize passive play (always checking) or over-bluffing." \
-  --model claude-haiku-4-5-20251001 \
-  --max-rounds 3 \
-  --enrich kuhn_poker \
-  --output data/kuhn_poker/kuhn_prefs_clean.json \
-  --plot data/kuhn_poker/pref_graph.png \
-  --verbose
+### Games
+
+Generate random two-player zero-sum minimax game trees with:
+- Branching factor b ∈ {2, 3, 4}
+- Depth d ∈ {4, 6, 8, 10}
+- Leaf payoffs sampled uniformly from [0, 100]
+- Players alternate turns (P1 maximizes, P2 is unconstrained)
+
+Generate N=50 random games per (b, d) configuration.
+
+### Experiment 1: MCTS Aggressiveness vs Strategy Quality
+
+**Question**: does more aggressive MCTS exploration yield a learned automaton whose strategy approaches optimal?
+
+**Vary**: MCTS rollout budget per equivalence query — {100, 500, 1000, 5000, 10000}
+
+**Measure** for each budget:
+- Average P1 payoff of the learned strategy across all 50 games, over 1000 plays against random P2
+- Average P1 payoff against minimax-optimal P2
+- Number of states in the learned automaton
+- Number of equivalence queries before convergence
+
+**Expected result**: higher rollout budget → strategy closer to optimal, more states in the automaton reflecting finer strategic distinctions.
+
+### Experiment 2: Game Complexity vs Automaton Complexity
+
+**Question**: how does the size of the search space affect the complexity of the learned automaton and the difficulty of learning it?
+
+**Vary**: game tree size via (b, d) configurations
+
+**Measure** for each configuration:
+- Number of states in the learned automaton
+- Total oracle queries (membership + equivalence) to convergence
+- Gap between learned strategy payoff and minimax-optimal payoff at fixed MCTS budget
+
+**Expected result**: larger games → more automaton states, more queries, larger optimality gap at fixed budget.
+
+### Evaluation Metric
+
+For both experiments, strategy quality is measured as:
+
+```
+normalized_payoff = (learned_payoff - random_payoff) / (optimal_payoff - random_payoff)
 ```
 
-| Argument | Description |
-|---|---|
-| `prefs` (positional) | Preferences JSON from Step 2 |
-| `traces` (positional) | Same `.txt` traces file used in Step 2 |
-| `--prompt` | Same system prompt (or file path) used in Step 2 |
-| `--model` | Anthropic model ID |
-| `--max-rounds` | Max LLM re-query rounds before dropping cycle edges (default: 3) |
-| `--enrich` | `kuhn_poker` enricher |
-| `--output` | Path to write cleaned preferences JSON; omit to print to stdout |
-| `--plot` | Save preference graph as PNG (green edges = consistent, red = cyclic MFAS edges) |
-| `--verbose` | Print cycle/MFAS progress to stderr |
-
----
-
-### Full pipeline in one block
-
-```bash
-# 1. Generate traces
-python src/dot_trace_generator.py \
-  src/data/Kuhn_Poker/kuhn_poker.dot \
-  --fmt dot \
-  --aps a0,a1,a2,bs,c1hi,c1lo,c2hi,c2lo,cur_bet,deal,m1b0,m1b1,m1b2,m2b0,m2b1,m2b2,p1,p1b,p2b,p2c,p2r \
-  --num 10 --length 8 \
-  --out data/kuhn_poker/kuhn_traces.txt
-
-# 2. Elicit preferences
-python src/preference_elicitor.py \
-  data/kuhn_poker/kuhn_traces.txt \
-  --prompt "You are evaluating a Kuhn Poker player. Prefer traces where the player bluffs with low cards and value-bets with high cards. Penalize passive play or over-bluffing." \
-  --enrich kuhn_poker \
-  --output data/kuhn_poker/kuhn_prefs.json \
-  --verbose
-
-# 3. Check consistency -> cleaned JSON
-python src/consistency_checker.py \
-  data/kuhn_poker/kuhn_prefs.json \
-  data/kuhn_poker/kuhn_traces.txt \
-  --prompt "You are evaluating a Kuhn Poker player. Prefer traces where the player bluffs with low cards and value-bets with high cards. Penalize passive play or over-bluffing." \
-  --enrich kuhn_poker \
-  --output data/kuhn_poker/kuhn_prefs_clean.json \
-  --plot data/kuhn_poker/pref_graph.png \
-  --verbose
-```
-
-> **Note:** `--prompt` accepts either an inline string or a path to a `.txt` file. Storing the prompt in a file (e.g. `data/kuhn_poker/player_eval_prompt.txt`) and passing that path keeps Steps 2 and 3 guaranteed to use the same prompt without copy-paste drift.
-
-
-# Current Work - Christian: Saturday, March 28th
-
-Here is the new source code we have. I realistically need to spend some time doing a more thorough analysis of what the code does.
-I used a lot of Claude that took from the existing source code with the goal to reorganize it with a focus on removing the LLM querying from within the core algorithm.
-That way, we can focus on optimizing the LLM querying step as an isolated component. This aligns more so with the proposal's desire to precompute the LLM queries.
-However, I need to spend more time analyzing each function and I am sure we could benefit from unit tests to actually make sure we know what occurs at each step.
-
-Right now, we know there is a major issue with what symbolic L* attempts to query and:
-
-1. If it exists in the cache?
-2. How do we assign preferences to prefix closure in cache? (Currently Using a Claude Technique I have not manually verified: *Place Holder*).
-3. How do we handle illegal moves queried from symbolic L* if that is even possible or I am doing something horribly off.
-
-
-These remain the key issues. Regardless, this new format, is a good start at isolating the LLM querying step which we wanted.
-
-## Pipeline:
-
-### run.py
-
-Orchestrates all four steps:
-  1. Generate corpus T          (skipped if corpus.json exists)
-  2. Pre-compute cache          (skipped if cache.json exists)
-  3. Run symbolic L*            (always)
-  4. Evaluate learned machine   (always)
-
-### corpus/generate.py
-
-Builds the finite trace corpus T = {t_1, ..., t_N} from the Kuhn Poker
-DOT machine and writes it to corpus/corpus.json. Utilizes `dot_trace_generator.py` from original source.
-
-Two modes (set in config.py):
-  "exhaustive" — DFS over the automaton; yields all 62 legal Kuhn Poker hands.
-  "sampled"    — random walks from the initial state; yields CORPUS_SAMPLE_SIZE hands.
-
-### precompute/build_cache.py
-
-Runs classification, preference pre-computation, and prefix-closed
-extension over the corpus, then writes everything to precompute/cache.json.
-
-#### precompute/classify.py
-
-Uses either a deterministic/LLM back-end to assign every trace t_i in the corpus a label in sigma_O = {-1, 0, 1}:
-
-  -1  P2 loses  (hand ends with _W1)
-   0  in progress  (no terminal outcome symbol)
-   1  P2 wins   (hand ends with _W2)
-
-The result is stored in precompute/cache.json under the key "classifications":
-
-### precompute/preferences.py
-
-Computes pairwise preferences over the corpus T before learning begins,
-so that symbolic_lstar never needs to make a live LLM call.
-
-Two strategies (set in config.py):
-  "all_pairs"  — compare every (i, j) pair; O(N^2/2) calls.
-                 Feasible for N=62 (1891 pairs).
-  "quicksort"  — randomised quicksort order; O(N log N) calls.
-                 Scales to larger corpora.
-
-Both strategies write their results to precompute/cache.json under "preferences":
-
-### precompute/prefix_tree.py
-
-Extends the classification dict to be prefix-closed using minimax aggregation.
-
-Aggregation uses minimax:
-  P2 decision nodes  (children start with P2_ or P2B_) → max over children
-  P1 decision nodes  (children start with P1_ or P1B_) → min over children
-  Chance nodes       (children start with DEAL_)        → average over children
-
-This reflects rational strategic reasoning:
-  P2 is the agent whose quality we evaluate → P2 plays optimally (max)
-  P1 is the opponent                        → P1 plays adversarially (min)
-  Card dealing is random                    → average
-
-**This strategy was more so decided by Claude. This is not meant to be a finished strategy. Rather, I wanted some placeholder to start us off while we spend more time figuring that out.**
-
-**I need to spend some time evaluating this strategy**
-
-### teacher/cached_teacher.py
-
-A drop-in teacher for symbolic_lstar that answers all queries from the
-pre-computed cache — no live LLM calls during learning.
-
-*Current Issues:*
-
-`preference_query` is not correctly querying the cache. It attempts to query for prefixes that are not valid Kuhn Poker moves (prefix w/ one atom that is not a DEAL). Because of that it, defaults to a fall_back case that uses deterministic preference querying. What I am noticing occur is that, just comparing the first token/atom in the prefix 
-
---- 
-**LLM NOTES**:
-
-  To run with LLM, place your API key at
-  ---erfect_Information_Automata_Learning/.env/api_key and run:
-  What's in the cache
-  .venv/bin/python src/pipeline/run.py --backend llm --regen-cache
-  The cache classifications dict has keys that are |-joined game sequences:
-
-  ""                                           ← empty prefix (root of game tree)
-  "DEAL_King_Queen"                            ← after deal only
-  "DEAL_King_Queen|P1_King_Queen_check"        ← deal + P1 checks
-  "DEAL_King_Queen|P1_King_Queen_check|P2_King_Queen_bet_none"  ← P2 then bets
-  "DEAL_King_Queen|P1_King_Queen_check|P2_King_Queen_bet_none|P1B_King_Queen_call_W1"  ← P1 calls, P1 wins (leaf)
-
-  Notice the pattern: keys always START with DEAL_. Real Kuhn poker games always begin with a deal.
-
-  ---
-  What L* actually queries
-
-  L* builds an observation table. Rows are prefixes it tracks. Initially there are 61 rows:
-  - 1 row: the empty sequence ()
-  - 60 rows: every single symbol in σ_I, like ('DEAL_King_Queen',), ('P1_King_Queen_bet',), ('P2B_King_Jack_call_W1',), etc.
-
-  To fill the table, L* compares pairs of rows by calling preference_query. Here are three representative comparisons:
-
-  ---
-  Example 1 — Tier 2 hit (both in prefix tree)
-
-  s1 = ('DEAL_King_Queen',)   →   key = "DEAL_King_Queen"   ✓ in cache
-  s2 = ('DEAL_Queen_King',)   →   key = "DEAL_Queen_King"   ✓ in cache
-
-  Tier 2: raw1 = -1.0,  raw2 = +1.0
-          v1   = -1,    v2   = +1
-          → return -1  (s2 preferred, P2 wins with Queen_King deal)
-
-  Both are valid game-starting symbols. Both appear as the first step of corpus traces. Both are in the prefix tree.
-
-  ---
-  Example 2 — Tier 3 hit (one is NOT in the prefix tree)
-
-  s1 = ('DEAL_King_Queen',)   →   key = "DEAL_King_Queen"   ✓ in cache
-  s2 = ('P1_King_Queen_bet',) →   key = "P1_King_Queen_bet" ✗ NOT in cache
-
-  P1_King_Queen_bet is P1's first action — it can only appear as step 2 of a game (after the deal). No corpus trace ever STARTS with it, so it has no prefix tree entry.
-
-  Tier 2's condition is k1 in classifications AND k2 in classifications. k2 fails → falls to Tier 3.
-
-  Tier 3 calls classify_deterministic:
-  - ('DEAL_King_Queen',) → no _W1/_W2 in symbol → returns 0
-  - ('P1_King_Queen_bet',) → no _W1/_W2 in symbol → returns 0
-  - Both 0 → return 0 (equal)
-
-  This is semantically correct: neither sequence represents a finished game, so both are "in progress."
-
-  ---
-  Example 3 — Tier 3 hit (terminal single-symbol)
-
-  s1 = ('P1B_King_Queen_call_W1',)  →  key not in cache (can't start a game)
-  s2 = ('DEAL_King_Queen',)         →  key "DEAL_King_Queen" ✓ in cache
-
-  Again Tier 2 fails because s1 isn't in the cache.
-
-  Tier 3 calls classify_deterministic:
-  - ('P1B_King_Queen_call_W1',) → symbol ends in _W1 → P1 wins → returns -1
-  - ('DEAL_King_Queen',) → no _W1/_W2 → returns 0
-  - -1 < 0 → return -1 (s2 preferred)
-
-  This is also semantically correct: _W1 encoded in the symbol name literally means "P1 won here."
-
-  ---
-  Why Tier 3 handles everything correctly here
-
-  The 60 symbols in σ_I divide into two groups:
-
-  ┌────────────────────────────┬──────────────────────────────────────────────┬──────────┬────────────────────────┐
-  │        Symbol type         │                   Example                    │ _W1/_W2? │ classify_deterministic │
-  ├────────────────────────────┼──────────────────────────────────────────────┼──────────┼────────────────────────┤
-  │ DEAL_*                     │ DEAL_King_Queen                              │ no       │ 0 (in progress)        │
-  ├────────────────────────────┼──────────────────────────────────────────────┼──────────┼────────────────────────┤
-  │ P1_* / P2_* (intermediate) │ P1_King_Queen_bet, P2_Jack_King_bet_none     │ no       │ 0 (in progress)        │
-  ├────────────────────────────┼──────────────────────────────────────────────┼──────────┼────────────────────────┤
-  │ P1B_* / P2_* (terminal)    │ P1B_King_Queen_call_W1, P2_Jack_King_fold_W1 │ yes      │ ±1                     │
-  └────────────────────────────┴──────────────────────────────────────────────┴──────────┴────────────────────────┘
-
-  The W1/W2 outcome is encoded in the symbol name itself by the game representation. So classify_deterministic is ground-truth correct for single-symbol sequences — no LLM needed.
-
-  ---
-  Why this matters for LLM
-
-  When you switch to --backend llm, the leaf labels come from Claude instead of the symbol scanner. But single-symbol queries (which dominate the 327 queries) still fall to Tier 3 — and for single symbols, Tier 3 is
-  provably correct regardless of backend, because the outcome is in the symbol name.
-
-  The LLM's opinion only matters for complete multi-symbol traces (the leaf labels). Tier 2 propagates those opinions up to intermediate prefixes via minimax. Tier 3 handles the edge cases that can never start a real
-   game.
-
-❯ so in our last run, we had no multi symbol traces? why not                
-
-⏺ Good question. Two things are happening:
-
-  ---
-  Reason 1: Initial suffix set is just {ε}
-
-  L* compares row + suffix entries. At initialization, the only suffix is the empty sequence (). So every comparison is:
-
-  row_i + ()  vs  row_j + ()
-  =  row_i        vs  row_j
-
-  The rows at initialization are the 60 single-symbol entries + (). So every query in round 1 is single-symbol by construction — no multi-symbol sequences exist yet.
-
-  Multi-symbol queries appear only when L* adds new suffixes (during consistency checks) or promotes a row to the upper table (during closure) and then extends it. But in our run, the equivalence check passed on the
-  first try — L* never needed a second suffix.
-
-  ---
-  Reason 2: The 60 symbols already split into exactly 3 classes
-
-  Look at the 60 symbols by their _W1/_W2 ending:
-
-  ┌─────────┬──────────────────────────────────────────────────────┬────────────────────────┐
-  │  Group  │                   Example symbols                    │ classify_deterministic │
-  ├─────────┼──────────────────────────────────────────────────────┼────────────────────────┤
-  │ Has _W2 │ P1B_Jack_King_call_W2, P2_Jack_King_check_W2         │ 1 (P2 wins)            │
-  ├─────────┼──────────────────────────────────────────────────────┼────────────────────────┤
-  │ Has _W1 │ P1B_King_Jack_fold_W2... wait, P2B_Jack_King_fold_W1 │ -1 (P1 wins)           │
-  ├─────────┼──────────────────────────────────────────────────────┼────────────────────────┤
-  │ Neither │ DEAL_*, P1_*_bet, P2_*_bet_none, P1B_*_raise_none    │ 0 (in progress)        │
-  └─────────┴──────────────────────────────────────────────────────┴────────────────────────┘
-
-  Those 3 groups = 3 equivalence classes = exactly the 3-state reward machine. L* identified them from single-symbol comparisons alone, built a 3-state hypothesis, and the equivalence check passed immediately on all
-  62 corpus traces.
-
-  ---
-  When would multi-symbol sequences appear?
-
-  If the equivalence check had failed, it would return a counterexample — a multi-symbol trace from the corpus like:
-
-  ('DEAL_King_Queen', 'P1_King_Queen_check', 'P2_King_Queen_bet_none', 'P1B_King_Queen_call_W1')
-
-  L* would then add a new suffix derived from that trace, which causes the next round to compare sequences like:
-
-  ('DEAL_King_Queen',) + ('P1_King_Queen_check', ...) = 4-symbol sequence
-
-  That 4-symbol sequence IS in the corpus prefix tree → would hit Tier 2.
-
-  For the LLM backend, if the LLM labels introduce ambiguity (e.g., classifying some hands as draws instead of wins/losses), the equivalence check might fail and trigger those deeper multi-symbol comparisons — which
-  is where Tier 2 was specifically designed to help.
-
-✻ Baked for 1m 1s
-
-❯ I see so because we were able to learn an autoamta with just the singular 
- symbol prefixes, we never needed to check our multi symbol ones            
-⏺ Exactly. The 3-state machine was "visible" from just the single-symbol
-  level because the outcome (_W1, _W2, or neither) is encoded directly in
-  each terminal symbol's name. L* found the solution in one pass without
-  needing to look deeper.
-
-  The more interesting case — and the one Tier 2 was built for — is the LLM
-  backend, where:
-
-  1. The LLM labels complete multi-symbol traces based on strategic quality,
-   not just symbol names
-  2. Its preferences might not map cleanly onto 3 classes from single
-  symbols alone
-❯ here is what concerns me. Let's say we use an LLM to compute on the full  
-traces, and then we create our prefix closure-based cache. Would we not     
-learn from the start symbols anways? we only give the LLM real traces that  
-⏺lYou've just identified the core problem with the current design.          
-  prefix tree — Tier 2 kicks in with minimax-derived values rooted in the
-  ---'s own judgments
-  The issue
-  So the deterministic run validating correctness is good, but it's
-  Look at the symbols in sigma_I:o for the cache. The LLM run is where the
-  prefix-closed cache design actually gets exercised.
-  P2_Jack_King_fold_W1     ← W1 is literally in the name → P1 wins
-  P1B_King_Queen_call_W2   ← W2 is literally in the name → P2 wins
-  P1_King_Queen_bet        ← no W → in progress
-  DEAL_King_Queen          ← no W → in progress
-
-  The outcome is encoded in the symbol name. classify_deterministic just reads it. So when L* compares single-symbol sequences at initialization, it's not consulting the LLM's judgment — it's reading symbol names.
-  The LLM is never involved.
-
-  The 3-state machine gets learned correctly, but for the wrong reason: symbol name parsing, not strategic reasoning.
-
-  ---
-  Why this matters
-
-  Your project goal is to see if an LLM's strategic understanding of Kuhn poker can be captured in an automaton. But with this setup:
-
-  1. Single-symbol comparisons → Tier 3 → deterministic → LLM not consulted
-  2. L* finds 3 states → equivalence check passes → done
-  3. LLM labels on complete traces: never looked at during learning
-
-  You'd get the same result with or without the LLM.
-
-  ---
-  The fix
-
-  The symbols need to be opaque — they shouldn't encode their outcome. Instead of P2_Jack_King_fold_W1, use something like P2_Jack_King_fold and let the LLM's classification be the only source of truth about who won.
-
-  With opaque symbols:
-  - classify_deterministic returns 0 for everything (no W1/W2 to scan)
-  - Tier 3 fallback becomes meaningless
-  - L* is forced to rely on Tier 1 (complete-trace preferences from LLM) and Tier 2 (minimax propagation from those LLM labels)
-  - The LLM's strategic judgment actually drives what the automaton looks like
-
-  This is a meaningful change to the game representation and worth discussing with your advisor — it determines whether you're learning "from the LLM" or learning "from symbol names with LLM labels that happen to
-  agree."
-
-**END OF LLM RESPONSE**
-
----
-
-
-### teacher/deterministic_teacher.py
-
-Deterministic teacher and reward machine for Kuhn Poker.
-
-No LLM. All preferences are derived directly from game outcomes and
-strategic quality, both encoded in the DOT machine symbols.
-
-Used by corpus/generate.py and evaluate.py
-
-### evaluate.py
-
-Compares the learned hypothesis against the ground-truth reward machine
-produced by build_kuhn_reward_machine() and prints a summary.
+Where:
+- `random_payoff` = average payoff of a uniformly random P1 strategy
+- `optimal_payoff` = minimax-optimal payoff (computed by backward induction on the known tree)
+- `learned_payoff` = average payoff of the learned automaton strategy
+
+A score of 0 is random play, 1 is optimal. This normalizes across games with different payoff scales.

@@ -8,9 +8,9 @@ Players alternate turns starting with P1.
 Each node has a random integer value; trace score = cumulative sum of node values.
 
 Usage:
-    python game_generator.py 4
-    python game_generator.py 6 --branching 3 --seed 42 --scores
-    python game_generator.py 4 --output game.json
+    python -m src.game.game_generator 4
+    python -m src.game.game_generator 6 --branching 3 --seed 42 --scores
+    python -m src.game.game_generator 4 --output game.json
 """
 
 import argparse
