@@ -18,9 +18,9 @@ def oracle():
 # ---------------------------------------------------------------------------
 
 def test_preferred_move_takes_winning_move(oracle):
-    # O has 0,4 and can win by playing 8 (diagonal)
-    # Trace: X:1, O:0, X:2, O:4  — O can win at 8
-    prefix = [1, 0, 2, 4]
+    # O has 0,4 and can win by playing 8 (diagonal 0-4-8)
+    # Trace: X:1, O:0, X:2, O:4, X:3 — now O's turn, O wins at 8
+    prefix = [1, 0, 2, 4, 3]
     move = oracle.preferred_move(prefix)
     assert move == 8
 
