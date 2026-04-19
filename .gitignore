@@ -12,3 +12,6 @@ src/viz/diagrams/*.png
 
 # Environment
 .env
+
+# Mac OS
+.dS_Store
