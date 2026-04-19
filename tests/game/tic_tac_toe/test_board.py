@@ -96,10 +96,10 @@ def test_x_wins(moves):
 
 @pytest.mark.parametrize("moves", [
     [3, 0, 4, 1, 8, 2],     # O wins top row
-    [0, 3, 1, 4, 2, 5],     # O wins middle row
-    [0, 6, 1, 7, 2, 8],     # O wins bottom row
+    [0, 3, 1, 4, 8, 5],     # O wins middle row
+    [0, 6, 1, 7, 3, 8],     # O wins bottom row
     [1, 0, 2, 3, 8, 6],     # O wins left col
-    [0, 1, 3, 4, 6, 7],     # O wins middle col
+    [0, 1, 2, 4, 3, 7],     # O wins middle col
     [0, 2, 1, 5, 3, 8],     # O wins right col
     [1, 0, 2, 4, 3, 8],     # O wins diagonal \
     [0, 2, 1, 4, 3, 6],     # O wins diagonal /
