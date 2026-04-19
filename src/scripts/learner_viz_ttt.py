@@ -70,27 +70,35 @@ def main():
     # ------------------------------------------------------------------
     # Run L*  (single pass — oracle is fixed minimax, no improvement loop)
     # ------------------------------------------------------------------
-    viz.show_round_header(1)
+    MAX_ROUNDS = 10
+    model = None
 
-    model = run_Lstar(
-        alphabet                = p1_inputs,
-        sul                     = sul,
-        eq_oracle               = eq_oracle,
-        automaton_type          = 'mealy',
-        print_level             = 0,
-        cache_and_non_det_check = False,
-    )
+    for rnd in range(1, MAX_ROUNDS + 1):
+        viz.show_round_header(rnd)
 
-    viz.show_hypothesis(model, p1_inputs)
+        model = run_Lstar(
+            alphabet                = p1_inputs,
+            sul                     = sul,
+            eq_oracle               = eq_oracle,
+            automaton_type          = 'mealy',
+            print_level             = 0,
+            cache_and_non_det_check = False,
+        )
 
-    # Run MCTS rollouts so Table B is populated
-    remaining = {None: args.K}
-    for _ in range(args.K):
-        eq_oracle._rollout(model, remaining)
+        viz.show_hypothesis(model, p1_inputs)
 
-    viz.show_table_b(eq_oracle.table_b)
-    viz.show_deviations(eq_oracle._deviation_leaves)
-    viz.show_improvement(None)   # oracle is minimax — always converged in one pass
+        remaining = {None: args.K}
+        for _ in range(args.K):
+            eq_oracle._rollout(model, remaining)
+
+        viz.show_table_b(eq_oracle.table_b)
+        viz.show_deviations(eq_oracle._deviation_leaves)
+
+        improvement = eq_oracle._check_for_improvement(model)
+        viz.show_improvement(improvement)
+
+        if improvement is None:
+            break   # converged
 
     # ------------------------------------------------------------------
     # Evaluate vs random X
