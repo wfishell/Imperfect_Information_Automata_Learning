@@ -1,6 +1,8 @@
 from __future__ import annotations
 from src.game.dots_and_boxes.board import DotsAndBoxesState
 
+PASS = 'PASS'
+
 
 class DotsAndBoxesNFA:
 
@@ -12,11 +14,14 @@ class DotsAndBoxesNFA:
     # ------------------------------------------------------------------
 
     def get_node(self, trace: list) -> DotsAndBoxesState | None:
-        """Replay trace from root, returning the resulting state or None if illegal."""
+        """Replay trace from root, returning the resulting state or None if illegal.
+        PASS actions are no-ops — they advance the model turn without changing game state."""
         state = self.root
         for action in trace:
             if state is None or state.is_terminal():
                 return None
+            if action == PASS:
+                continue
             if action not in state.children:
                 return None
             state = state.children[action]
@@ -28,8 +33,10 @@ class DotsAndBoxesNFA:
 
     def p1_legal_inputs(self, trace: list) -> list:
         state = self.get_node(trace)
-        if state is None or state.player != 'P1' or state.is_terminal():
+        if state is None or state.is_terminal():
             return []
+        if state.player == 'P2':
+            return [PASS]   # P2 earned extra turn — P1's only legal input is PASS
         return list(state.children.keys())
 
     def p2_legal_moves(self, trace: list) -> list:

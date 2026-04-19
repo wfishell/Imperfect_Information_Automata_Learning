@@ -90,8 +90,9 @@ def test_p1_legal_inputs_at_root(nfa):
 def test_p2_legal_moves_after_one_p1_move(nfa):
     assert set(nfa.p2_legal_moves([0])) == set(range(12)) - {0}
 
-def test_p1_legal_inputs_empty_on_p2_turn(nfa):
-    assert nfa.p1_legal_inputs([0]) == []
+def test_p1_legal_inputs_pass_on_p2_turn(nfa):
+    # When it's P2's turn, P1's only legal input is PASS (extra-turn mechanic)
+    assert nfa.p1_legal_inputs([0]) == ['PASS']
 
 def test_p2_legal_moves_empty_on_p1_turn(nfa):
     assert nfa.p2_legal_moves([]) == []
