@@ -9,6 +9,7 @@ Usage:
 """
 
 import argparse
+from pathlib import Path
 from aalpy.learning_algs import run_Lstar
 
 from src.game.game_generator import generate_tree, print_tree
@@ -107,8 +108,12 @@ def main():
     # Final summary
     # ------------------------------------------------------------------
     viz.show_final_summary(model, sul, eq_oracle, table_b)
-    model.save('learned_strategy')
-    viz.console.print("[dim]Saved: learned_strategy.dot[/dim]")
+
+    diagrams_dir = Path(__file__).parents[1] / 'viz' / 'diagrams'
+    diagrams_dir.mkdir(parents=True, exist_ok=True)
+    save_path = diagrams_dir / f'learned_strategy_d{args.depth}_s{args.seed}'
+    model.save(str(save_path))
+    viz.console.print(f"[dim]Saved: {save_path}.dot[/dim]")
 
 
 if __name__ == '__main__':

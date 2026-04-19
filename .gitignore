@@ -5,3 +5,10 @@ __pycache__
 # Generated pipeline artifacts
 corpus.json
 cache.json
+
+# Generated diagrams (keep the folder, ignore the files)
+src/viz/diagrams/*.dot
+src/viz/diagrams/*.png
+
+# Environment
+.env
