@@ -2,11 +2,11 @@
 Learn P2's strategy automaton for Dots and Boxes via L* + MCTS.
 
 Usage:
-    python -m src.scripts.learner_dab
-    python -m src.scripts.learner_dab --rows 2 --cols 2 --depth-n 5 --K 200
-    python -m src.scripts.learner_dab --oracle-depth 2 --verbose
-    python -m src.scripts.learner_dab --play
-    python -m src.scripts.learner_dab --play my_strategy.dot --rows 2 --cols 2
+    python -m src.scripts.dab.learner
+    python -m src.scripts.dab.learner --rows 2 --cols 2 --depth-n 5 --K 200
+    python -m src.scripts.dab.learner --oracle-depth 2 --verbose
+    python -m src.scripts.dab.learner --play
+    python -m src.scripts.dab.learner --play my_strategy.dot --rows 2 --cols 2
 """
 
 import argparse

@@ -2,8 +2,8 @@
 Main entry point: learn P2's strategy automaton for a random minimax game.
 
 Usage:
-    python -m src.scripts.learner 4
-    python -m src.scripts.learner 4 --seed 42 --depth-n 2 --K 100 --verbose
+    python -m src.scripts.random_game.learner 4
+    python -m src.scripts.random_game.learner 4 --seed 42 --depth-n 2 --K 100 --verbose
 """
 
 import argparse

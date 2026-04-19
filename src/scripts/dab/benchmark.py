@@ -15,8 +15,8 @@ Produces five figures in viz/diagrams/:
 Layout: rows = oracle_depths, columns = seeds.
 
 Usage:
-    python -m src.scripts.benchmark_dab
-    python -m src.scripts.benchmark_dab --n-eval 200 --out dab_bench
+    python -m src.scripts.dab.benchmark
+    python -m src.scripts.dab.benchmark --n-eval 200 --out dab_bench
 """
 
 import itertools

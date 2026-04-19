@@ -2,8 +2,8 @@
 Learn P2's (O) strategy automaton for Tic-Tac-Toe via L* + MCTS.
 
 Usage:
-    python -m src.scripts.learner_ttt
-    python -m src.scripts.learner_ttt --depth-n 5 --K 200 --verbose
+    python -m src.scripts.ttt.learner
+    python -m src.scripts.ttt.learner --depth-n 5 --K 200 --verbose
 """
 
 import argparse

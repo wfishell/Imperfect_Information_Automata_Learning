@@ -3,9 +3,9 @@ Visualized strategy learner — identical algorithm to learner.py,
 with Rich terminal output at each step.
 
 Usage:
-    python -m src.scripts.learner_viz 4
-    python -m src.scripts.learner_viz 4 --seed 42 --depth-n 2 --K 100
-    python -m src.scripts.learner_viz 6 --tree-depth 3   # show 3 levels of game tree
+    python -m src.scripts.random_game.learner_viz 4
+    python -m src.scripts.random_game.learner_viz 4 --seed 42 --depth-n 2 --K 100
+    python -m src.scripts.random_game.learner_viz 6 --tree-depth 3   # show 3 levels of game tree
 """
 
 import argparse
@@ -18,7 +18,7 @@ from src.lstar_mcts.preference_oracle import PreferenceOracle
 from src.lstar_mcts.game_sul import GameSUL
 from src.lstar_mcts.table_b import TableB
 from src.lstar_mcts.mcts_oracle import MCTSEquivalenceOracle
-from src.scripts.learner import evaluate
+from src.scripts.random_game.learner import evaluate
 from src.viz.visualizer import Visualizer
 
 

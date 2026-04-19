@@ -2,9 +2,9 @@
 Learn P2's strategy automaton for Nim via L* + MCTS.
 
 Usage:
-    python -m src.scripts.learner_nim
-    python -m src.scripts.learner_nim --piles 1 2 3 --depth-n 5 --K 200
-    python -m src.scripts.learner_nim --oracle-depth 2 --verbose
+    python -m src.scripts.nim.learner
+    python -m src.scripts.nim.learner --piles 1 2 3 --depth-n 5 --K 200
+    python -m src.scripts.nim.learner --oracle-depth 2 --verbose
 """
 
 import argparse

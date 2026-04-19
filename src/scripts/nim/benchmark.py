@@ -15,9 +15,9 @@ Produces five figures in viz/diagrams/:
 Layout: rows = oracle_depths, columns = seeds.
 
 Usage:
-    python -m src.scripts.benchmark_nim
-    python -m src.scripts.benchmark_nim --n-eval 100 --out nim_bench
-    python -m src.scripts.benchmark_nim --small   # [1,2,3] only, fast
+    python -m src.scripts.nim.benchmark
+    python -m src.scripts.nim.benchmark --n-eval 100 --out nim_bench
+    python -m src.scripts.nim.benchmark --small   # [1,2,3] only, fast
 """
 
 import itertools

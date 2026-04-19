@@ -2,8 +2,8 @@
 Visualized L* strategy learner for Tic-Tac-Toe.
 
 Usage:
-    python -m src.scripts.learner_viz_ttt
-    python -m src.scripts.learner_viz_ttt --depth-n 5 --K 200
+    python -m src.scripts.ttt.learner_viz
+    python -m src.scripts.ttt.learner_viz --depth-n 5 --K 200
 """
 
 import argparse
