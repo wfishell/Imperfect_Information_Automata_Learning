@@ -70,27 +70,16 @@ def test_never_loses_to_random(learned_model):
         model.reset_to_initial()
 
         while not state.is_terminal():
-            if state.player == 'P1':
-                # Random X move
-                move = rng.choice(list(state.children.keys()))
-                model.step(move)          # keep model in sync
-                state = state.children[move]
-            else:
-                # Learned O move
-                if state.is_terminal():
-                    break
-                p1_moves_so_far = [
-                    m for i, m in enumerate(
-                        [k for k in state.board if k == 1]
-                    )
-                ]
-                # Step model with a dummy P1 move to get O's output
-                # (model already stepped on P1's move above)
-                o_move = model.step(list(state.children.keys())[0])
-                # Use oracle fallback if model output is invalid
-                if o_move not in state.children:
-                    o_move = list(state.children.keys())[0]
-                state = state.children[o_move]
+            # P1's turn: model input=P1 move, output=O's response
+            p1_move = rng.choice(list(state.children.keys()))
+            o_move  = model.step(p1_move)
+            state   = state.children[p1_move]
+            if state.is_terminal():
+                break
+            # O's turn: apply the model's output
+            if o_move not in state.children:
+                o_move = rng.choice(list(state.children.keys()))
+            state = state.children[o_move]
 
         if state.winner() == 'P1':
             losses += 1

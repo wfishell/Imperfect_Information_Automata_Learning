@@ -118,7 +118,7 @@ class Visualizer:
         table.add_column("Pruned", justify="center")
 
         for trace, action, stats in shown:
-            prefix_str = " → ".join(trace) if trace else "ε"
+            prefix_str = " → ".join(str(a) for a in trace) if trace else "ε"
             val_color  = "green" if stats.value >= 0.5 else "red"
             pruned_str = "[red]✗[/red]" if stats.zero_prob else "[dim]–[/dim]"
             table.add_row(
@@ -152,8 +152,8 @@ class Visualizer:
 
         for dev_tuple, leaves in sorted(deviation_leaves.items(),
                                          key=lambda x: -len(x[1])):
-            dev_str    = " → ".join(dev_tuple) if dev_tuple else "ε"
-            sample     = " → ".join(leaves[-1]) if leaves else "–"
+            dev_str    = " → ".join(str(a) for a in dev_tuple) if dev_tuple else "ε"
+            sample     = " → ".join(str(a) for a in leaves[-1]) if leaves else "–"
             table.add_row(
                 f"[cyan]{dev_str}[/cyan]",
                 str(len(leaves)),
@@ -174,7 +174,7 @@ class Visualizer:
                       border_style="green")
             )
         else:
-            p1_seq = " → ".join(str(x) for x in improvement)
+            p1_seq = " → ".join(str(a) for a in improvement)
             self.console.print(
                 Panel(
                     f"[yellow bold]Improvement found![/yellow bold]\n"
@@ -209,6 +209,51 @@ class Visualizer:
             f"[{color}]{norm:.3f}[/{color}]  [dim](0 = random, 1 = optimal)[/dim]",
         )
 
+        self.console.print(table)
+        self.console.print()
+
+    # ------------------------------------------------------------------
+    # Tic-Tac-Toe board display
+    # ------------------------------------------------------------------
+
+    def show_ttt_board(self, state, title: str = "Board") -> None:
+        symbols = {0: "[dim]·[/dim]", 1: "[bold cyan]X[/bold cyan]",
+                   2: "[bold green]O[/bold green]"}
+        lines = []
+        for r in range(3):
+            row = "  ".join(symbols[state.board[r * 3 + c]] for c in range(3))
+            lines.append(row)
+        board_str = "\n".join(lines)
+        player_str = (f"[bold]{state.player}[/bold] to move"
+                      if not state.is_terminal()
+                      else f"[red bold]terminal[/red bold] — {state.winner()}")
+        self.console.print(Panel(board_str + f"\n{player_str}", title=title,
+                                 border_style="dim"))
+        self.console.print()
+
+    def show_ttt_eval(self, losses: int, draws: int, wins: int,
+                      n_games: int) -> None:
+        loss_pct  = 100 * losses / n_games
+        draw_pct  = 100 * draws  / n_games
+        win_pct   = 100 * wins   / n_games
+        ok = losses == 0
+
+        table = Table(
+            title=f"O Strategy vs Random X  ({n_games} games)",
+            show_header=True, header_style="bold",
+        )
+        table.add_column("Outcome", style="bold")
+        table.add_column("Count",   justify="right")
+        table.add_column("%",       justify="right")
+
+        table.add_row("[green]O wins[/green]",  str(wins),   f"{win_pct:.1f}%")
+        table.add_row("[dim]Draws[/dim]",        str(draws),  f"{draw_pct:.1f}%")
+        table.add_row("[red]X wins[/red]",      str(losses), f"{loss_pct:.1f}%")
+        table.add_row(
+            "[bold]Verdict[/bold]",
+            "[green bold]PASS[/green bold]" if ok else "[red bold]FAIL[/red bold]",
+            "",
+        )
         self.console.print(table)
         self.console.print()
 
