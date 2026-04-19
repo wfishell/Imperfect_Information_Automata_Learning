@@ -136,8 +136,8 @@ class SMTValueAssigner:
 
 if __name__ == '__main__':
     import sys
-    from src.game.game_generator import generate_tree, compute_trace_scores
-    from src.game.game_nfa import GameNFA
+    from src.game.minimax.game_generator import generate_tree, compute_trace_scores
+    from src.game.minimax.game_nfa import GameNFA
     from src.lstar_mcts.preference_oracle import PreferenceOracle
 
     depth = int(sys.argv[1]) if len(sys.argv) > 1 else 4

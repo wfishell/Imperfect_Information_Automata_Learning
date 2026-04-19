@@ -10,8 +10,8 @@ import argparse
 from aalpy.learning_algs import run_Lstar
 from aalpy.utils import visualize_automaton
 
-from src.game.game_generator import generate_tree, print_tree, compute_trace_scores
-from src.game.game_nfa import GameNFA
+from src.game.minimax.game_generator import generate_tree, print_tree, compute_trace_scores
+from src.game.minimax.game_nfa import GameNFA
 from src.lstar_mcts.preference_oracle import PreferenceOracle
 from src.lstar_mcts.game_sul import GameSUL
 from src.lstar_mcts.table_b import TableB
@@ -137,7 +137,7 @@ def evaluate(model, root) -> dict:
 
     Returns mean scores and a normalised quality in [0, 1].
     """
-    from src.game.game_generator import GameNode
+    from src.game.minimax.game_generator import GameNode
     import random as rng
 
     nfa = GameNFA(root)

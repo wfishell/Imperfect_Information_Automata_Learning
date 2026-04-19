@@ -11,7 +11,7 @@ At every P2 state, P2's legal moves are simply the children of that node:
 At every P1 state, P1's input determines which branch is taken — P2 has no choice.
 """
 
-from .game_generator import GameNode
+from src.game.minimax.game_generator import GameNode
 
 
 class GameNFA:
