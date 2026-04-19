@@ -15,6 +15,7 @@ import sys
 import time
 import itertools
 import collections
+from pathlib import Path
 
 import matplotlib
 matplotlib.use('Agg')
@@ -196,6 +197,9 @@ def _plot_sweep(results, param_values, param_colors, param_label,
             ax.legend(fontsize=5, loc='lower right')
 
 
+DIAGRAMS_DIR = Path(__file__).parents[1] / 'viz' / 'diagrams'
+
+
 def make_figures(results, game_depths, k_values, depth_ns, seeds,
                  fixed_k=50, fixed_dn=None, out_prefix='convergence'):
     """
@@ -207,6 +211,8 @@ def make_figures(results, game_depths, k_values, depth_ns, seeds,
 
     Rows = game_depths, columns = seeds.
     """
+    DIAGRAMS_DIR.mkdir(parents=True, exist_ok=True)
+
     # Pick a representative depth_n for the K-sweep plots
     fdn = fixed_dn if fixed_dn is not None else max(dn for dn in depth_ns)
 
@@ -226,7 +232,7 @@ def make_figures(results, game_depths, k_values, depth_ns, seeds,
         fig.suptitle(f'{ylabel}  —  varying K  (depth_n={fdn})', fontsize=10)
         _plot_sweep(k_slice, k_values, K_COLORS, 'K',
                     game_depths, seeds, metric, ylabel, '', axes)
-        path = f'{out_prefix}_{suffix}_K.png'
+        path = DIAGRAMS_DIR / f'{out_prefix}_{suffix}_K.png'
         fig.savefig(path, dpi=120)
         plt.close(fig)
         print(f'Saved: {path}')
@@ -239,7 +245,7 @@ def make_figures(results, game_depths, k_values, depth_ns, seeds,
         fig.suptitle(f'{ylabel}  —  varying depth_n  (K={fixed_k})', fontsize=10)
         _plot_sweep(dn_slice, depth_ns, DN_COLORS, 'depth_n',
                     game_depths, seeds, metric, ylabel, '', axes)
-        path = f'{out_prefix}_{suffix}_dn.png'
+        path = DIAGRAMS_DIR / f'{out_prefix}_{suffix}_dn.png'
         fig.savefig(path, dpi=120)
         plt.close(fig)
         print(f'Saved: {path}')
