@@ -5,14 +5,18 @@ Usage:
     python -m src.scripts.learner_dab
     python -m src.scripts.learner_dab --rows 2 --cols 2 --depth-n 5 --K 200
     python -m src.scripts.learner_dab --oracle-depth 2 --verbose
+    python -m src.scripts.learner_dab --play
+    python -m src.scripts.learner_dab --play my_strategy.dot --rows 2 --cols 2
 """
 
 import argparse
 import random
 from pathlib import Path
 from aalpy.learning_algs import run_Lstar
+from aalpy.utils import load_automaton_from_file
 
 from src.game.dots_and_boxes.game_nfa import DotsAndBoxesNFA, PASS
+from src.game.dots_and_boxes.board import _h_edge, _v_edge
 from src.game.dots_and_boxes.preference_oracle import DotsAndBoxesOracle
 from src.game.dots_and_boxes.dab_sul import DotsAndBoxesSUL
 from src.lstar_mcts.table_b import TableB
@@ -20,6 +24,29 @@ from src.lstar_mcts.mcts_oracle import MCTSEquivalenceOracle
 
 
 MAX_ROUNDS = 10
+
+
+def _render_board(state) -> str:
+    """Render the board showing drawn edges and undrawn edge indices."""
+    rows, cols = state.rows, state.cols
+    lines = []
+    for r in range(rows + 1):
+        h_row = '.'
+        for c in range(cols):
+            idx = _h_edge(r, c, cols)
+            h_row += '---' if state.edges[idx] else f'{idx:^3}'
+            h_row += '.'
+        lines.append(h_row)
+        if r < rows:
+            v_row = ''
+            for c in range(cols + 1):
+                idx = _v_edge(r, c, rows, cols)
+                v_row += '|' if state.edges[idx] else f'{idx:<2}'
+                if c < cols:
+                    v_row += '   '
+            lines.append(v_row)
+    lines.append(f'({state.player} to move  P1:{state.p1_boxes}  P2:{state.p2_boxes})')
+    return '\n'.join(lines)
 
 
 def main():
@@ -34,7 +61,15 @@ def main():
     parser.add_argument('--oracle-depth', dest='oracle_depth', type=int,   default=None,
                         help='Minimax lookahead for oracle (default: None = optimal)')
     parser.add_argument('--verbose',      action='store_true')
+    parser.add_argument('--play',         nargs='?', const='learned_strategy_dab.dot',
+                        metavar='DOT_FILE',
+                        help='Play against a saved .dot controller instead of learning. '
+                             'Defaults to learned_strategy_dab.dot.')
     args = parser.parse_args()
+
+    if args.play is not None:
+        play_against_model(args.play, rows=args.rows, cols=args.cols)
+        return
 
     nfa     = DotsAndBoxesNFA(rows=args.rows, cols=args.cols)
     oracle  = DotsAndBoxesOracle(nfa, depth=args.oracle_depth)
@@ -88,6 +123,82 @@ def main():
     out = Path('learned_strategy_dab.dot')
     model.save(str(out))
     print(f'Saved: {out}')
+
+
+def play_against_model(dot_path: str, rows: int, cols: int) -> None:
+    """Interactive game: human plays P1, loaded .dot controller plays P2."""
+    dot_path = Path(dot_path)
+    if not dot_path.exists():
+        print(f'Error: {dot_path} not found. Run without --play to learn a strategy first.')
+        return
+
+    model = load_automaton_from_file(str(dot_path), automaton_type='mealy')
+    model.reset_to_initial()
+
+    nfa   = DotsAndBoxesNFA(rows=rows, cols=cols)
+    state = nfa.root
+
+    print(f'\nDots and Boxes {rows}×{cols}  —  You are P1, model is P2')
+    print('Undrawn edges are shown by their index number.\n')
+    print(_render_board(state))
+
+    while not state.is_terminal():
+        if state.player == 'P1':
+            legal = list(state.children.keys())
+            print(f'\nLegal moves: {legal}')
+            while True:
+                try:
+                    move = int(input('Your move (edge index): '))
+                    if move in legal:
+                        break
+                    print(f'  {move} is not a legal move.')
+                except (ValueError, EOFError):
+                    print('  Enter an integer edge index.')
+
+            p2_response = model.step(move)
+            state = state.children[move]
+            print()
+            print(_render_board(state))
+
+            if state.is_terminal():
+                break
+
+            if state.player == 'P1':
+                # P1 completed a box and keeps the turn; model output was PASS
+                print('  You completed a box — take another turn!')
+                continue
+
+            # Normal P2 response
+            if p2_response == PASS or p2_response not in state.children:
+                p2_response = random.choice(list(state.children.keys()))
+                print(f'  P2 (model fallback) plays edge {p2_response}')
+            else:
+                print(f'  P2 (model) plays edge {p2_response}')
+            state = state.children[p2_response]
+            print()
+            print(_render_board(state))
+
+        else:
+            # P2 earned an extra turn — feed PASS as P1's forced input
+            p2_response = model.step(PASS)
+            if p2_response == PASS or p2_response not in state.children:
+                p2_response = random.choice(list(state.children.keys()))
+                print(f'  P2 (model fallback extra turn) plays edge {p2_response}')
+            else:
+                print(f'  P2 (model, extra turn) plays edge {p2_response}')
+            state = state.children[p2_response]
+            print()
+            print(_render_board(state))
+
+    winner = state.winner()
+    print()
+    if winner == 'P1':
+        print('You win!')
+    elif winner == 'P2':
+        print('P2 (model) wins!')
+    else:
+        print("It's a draw!")
+    print(f'Final score — P1: {state.p1_boxes}  P2: {state.p2_boxes}')
 
 
 def evaluate_vs_random(model, nfa: DotsAndBoxesNFA,
