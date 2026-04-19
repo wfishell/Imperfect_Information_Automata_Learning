@@ -46,7 +46,7 @@ ORACLE_DEPTHS = [1, 2, 3, None]   # None = unbounded (globally optimal)
 K_VALUES      = [50, 100, 200]
 DEPTH_NS      = [2, 4, 6]
 SEEDS         = [0, 1, 2]
-GRID_SIZES    = [(2, 2), (3, 3)]   # (rows, cols) of boxes
+GRID_SIZES    = [(2, 2)]   # (rows, cols) of boxes
 
 N_EVAL     = 200
 EPSILON    = 0.05
