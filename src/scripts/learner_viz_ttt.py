@@ -10,8 +10,10 @@ import argparse
 import random
 from pathlib import Path
 from aalpy.learning_algs import run_Lstar
+from aalpy.utils import load_automaton_from_file
 
 from src.game.tic_tac_toe.game_nfa import TicTacToeNFA
+from src.game.tic_tac_toe.board import TicTacToeState, EMPTY, X, O
 from src.game.tic_tac_toe.preference_oracle import TicTacToeOracle
 from src.lstar_mcts.game_sul import GameSUL
 from src.lstar_mcts.table_b import TableB
@@ -31,12 +33,26 @@ def main():
                         help='Min advantage to accept a counterexample')
     parser.add_argument('--n-eval',  dest='n_eval', type=int, default=500,
                         help='Games to play when evaluating learned strategy')
+    parser.add_argument('--oracle-depth', dest='oracle_depth', type=int, default=None,
+                        help='Minimax depth for preference oracle (default: None = globally optimal)')
+    parser.add_argument('--play', action='store_true',
+                        help='Skip learning and play against a saved dot file instead')
+    parser.add_argument('--dot', type=str,
+                        default=None,
+                        help='Path to dot file to load for --play (default: viz/diagrams/learned_strategy_ttt.dot)')
     args = parser.parse_args()
+
+    if args.play:
+        dot_path = args.dot or str(
+            Path(__file__).parents[1] / 'viz' / 'diagrams' / 'learned_strategy_ttt.dot'
+        )
+        _play_vs_model(dot_path)
+        return
 
     viz = Visualizer()
 
     nfa     = TicTacToeNFA()
-    oracle  = TicTacToeOracle(nfa)
+    oracle  = TicTacToeOracle(nfa, depth=args.oracle_depth)
     sul     = GameSUL(nfa, oracle)
     table_b = TableB()
 
@@ -145,6 +161,64 @@ def _sample_o_win(nfa: TicTacToeNFA, oracle: TicTacToeOracle):
         trace.append(move)
         state = state.children[move]
     return state if state.winner() == 'P2' else None
+
+
+def _play_vs_model(dot_path: str) -> None:
+    """Interactive game: human plays X, learned Mealy machine plays O."""
+    model = load_automaton_from_file(dot_path, automaton_type='mealy')
+    model.reset_to_initial()
+    state = TicTacToeState()
+
+    _print_board(state)
+
+    while not state.is_terminal():
+        # --- Human (X / P1) ---
+        legal = list(state.children.keys())
+        while True:
+            try:
+                move = int(input(f"Your move (X) — choose from {legal}: "))
+                if move in legal:
+                    break
+                print("  Not a legal square, try again.")
+            except ValueError:
+                print("  Enter an integer.")
+
+        o_response = model.step(move)
+        state = state.children[move]
+        _print_board(state)
+
+        if state.is_terminal():
+            break
+
+        # --- Model (O / P2) ---
+        if o_response not in state.children:
+            # Mealy output may be a string; coerce to int
+            try:
+                o_response = int(o_response)
+            except (TypeError, ValueError):
+                o_response = list(state.children.keys())[0]
+
+        if o_response not in state.children:
+            o_response = list(state.children.keys())[0]
+
+        print(f"Model plays O → square {o_response}")
+        state = state.children[o_response]
+        _print_board(state)
+
+    w = state.winner()
+    if w == 'P1':   print("You win!")
+    elif w == 'P2': print("Model wins!")
+    else:           print("Draw!")
+
+
+def _print_board(state: TicTacToeState) -> None:
+    symbols = {EMPTY: '.', X: 'X', O: 'O'}
+    print()
+    for r in range(3):
+        row   = ' | '.join(symbols[state.board[r * 3 + c]] for c in range(3))
+        index = '   '.join(str(r * 3 + c) for c in range(3))
+        print(f"  {row}     ({index})")
+    print()
 
 
 if __name__ == '__main__':
