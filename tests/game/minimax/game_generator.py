@@ -186,4 +186,36 @@ class TestTreeToDict:
 
 class TestTreeFromDict:
     """Tests for tree_from_dict"""
-    pass
+
+    def test_single_node(self):
+        d = {'value': 5, 'player': 'P1', 'depth': 0, 'children': {}}
+        node = tree_from_dict(d)
+        assert node.value == 5
+        assert node.player == 'P1'
+        assert node.depth == 0
+        assert node.is_terminal()
+
+    def test_nested_children(self):
+        d = {
+            'value': 1, 'player': 'P1', 'depth': 0,
+            'children': {
+                'A': {'value': 2, 'player': 'P2', 'depth': 1, 'children': {}},
+                'B': {'value': 3, 'player': 'P2', 'depth': 1, 'children': {}}
+            }
+        }
+        node = tree_from_dict(d)
+        assert node.value == 1
+        assert node.player == 'P1'
+        assert node.depth == 0
+        assert not node.is_terminal()
+        assert set(node.children.keys()) == {'A', 'B'}
+        assert node.children['A'].value == 2
+        assert node.children['A'].player == 'P2'
+        assert node.children['A'].is_terminal()
+        assert node.children['B'].value == 3
+        assert node.children['B'].player == 'P2'
+        assert node.children['B'].is_terminal()
+
+    def test_round_trip(self):
+        root = generate_tree(depth=2, seed=42)
+        assert tree_to_dict(tree_from_dict(tree_to_dict(root))) == tree_to_dict(root)
