@@ -26,7 +26,7 @@ def oracle():
     table = TableB()
     return MCTSEquivalenceOracle(sul, nfa, pref, table, depth_N=2)
 
-
+# Will
 class TestCheckForImprovement:
     """Tests for MCTSEquivalenceOracle._check_for_improvement"""
     pass
@@ -36,7 +36,7 @@ class TestFindCex:
     """Tests for MCTSEquivalenceOracle.find_cex"""
     pass
 
-
+# Will
 class TestRollout:
     """Tests for MCTSEquivalenceOracle._rollout"""
     pass
@@ -46,12 +46,12 @@ class TestBudgetCheck:
     """Tests for MCTSEquivalenceOracle._budget_check"""
     pass
 
-
+# Will
 class TestShadowTrace:
     """Tests for MCTSEquivalenceOracle._shadow_trace"""
     pass
 
-
+# Will
 class TestCollectTableALeaves:
     """Tests for MCTSEquivalenceOracle._collect_table_a_leaves"""
     pass
