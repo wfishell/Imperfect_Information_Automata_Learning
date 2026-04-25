@@ -45,7 +45,64 @@ class TestGameNode:
 
 class TestGenerateTree:
     """Tests for generate_tree"""
-    pass
+
+    def test_root_is_p1_at_depth_zero(self):
+        root = generate_tree(depth=2, seed=0)
+        assert root.player == 'P1'
+        assert root.depth == 0
+
+    def test_players_alternate(self):
+        root = generate_tree(depth=2, seed=0)
+        for child in root.children.values():
+            assert child.player == 'P2'
+            for grandchild in child.children.values():
+                assert grandchild.player == 'P1'
+
+    def test_leaves_are_terminal_at_correct_depth(self):
+        root = generate_tree(depth=2, seed=0)
+        traces = compute_trace_scores(root)
+        for _, _ in traces:
+            pass  # just ensure no exception
+        # All leaves reachable — verify via structure
+        def check_leaves(node):
+            if node.is_terminal():
+                assert node.depth == 2
+            for child in node.children.values():
+                check_leaves(child)
+        check_leaves(root)
+
+    def test_branching_factor(self):
+        root = generate_tree(depth=2, branching=3, seed=0)
+        assert len(root.children) == 3
+        for child in root.children.values():
+            assert len(child.children) == 3
+
+    def test_p1_actions_are_letters(self):
+        root = generate_tree(depth=1, seed=0)
+        assert set(root.children.keys()) == {'A', 'B'}
+
+    def test_p2_actions_are_letters(self):
+        root = generate_tree(depth=2, seed=0)
+        for child in root.children.values():
+            assert set(child.children.keys()) == {'X', 'Y'}
+
+    def test_node_values_in_range(self):
+        root = generate_tree(depth=3, seed=0)
+        def check(node):
+            assert 0 <= node.value <= 10
+            for child in node.children.values():
+                check(child)
+        check(root)
+
+    def test_same_seed_produces_same_tree(self):
+        r1 = generate_tree(depth=2, seed=42)
+        r2 = generate_tree(depth=2, seed=42)
+        assert tree_to_dict(r1) == tree_to_dict(r2)
+
+    def test_different_seeds_produce_different_trees(self):
+        r1 = generate_tree(depth=2, seed=1)
+        r2 = generate_tree(depth=2, seed=2)
+        assert tree_to_dict(r1) != tree_to_dict(r2)
 
 
 class TestComputeTraceScores:
