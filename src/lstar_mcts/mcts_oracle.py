@@ -82,6 +82,20 @@ class MCTSEquivalenceOracle(Oracle):
         b_leaves = [l for leaves in self._deviation_leaves.values() for l in leaves]
         if not b_leaves:
             return None
+        
+        # DEBUG 
+        print(f'Checking for improvement: {len(self._deviation_leaves)} deviations, '
+              f'{len(b_leaves)} deviation leaves')
+        
+        print('  Deviation points:')
+        for deviation in self._deviation_leaves:
+            print(f'    {deviation}')
+
+        print('  Sample deviation leaves:')
+        for dev, leaves in self._deviation_leaves.items():
+            print(f'    Deviation {dev}:')
+            for leaf in leaves[:3]:
+                print(f'      {leaf}')
 
         # --- Collect all (deviation, leaf, shadow) triples ---
         triples: list[tuple[tuple, list, list]] = []
@@ -302,6 +316,10 @@ class MCTSEquivalenceOracle(Oracle):
         Given a deviation leaf trace, return the shadow trace that uses the
         same P1 inputs but follows the hypothesis P2 choices at every step.
         """
+
+        # DEBUG 
+        print(f"  Finding shadow for deviation leaf: {deviation_leaf}: \n Hypothesis: {hypothesis}")
+
         shadow: list[str] = []
         node = self.nfa.root
         p1_inputs = deviation_leaf[::2]   # every other element starting at 0
@@ -356,6 +374,7 @@ class MCTSEquivalenceOracle(Oracle):
 
     def _hypothesis_output(self, hypothesis, trace: list[str]) -> str | None:
         """What does the current hypothesis say P2 should do at this trace?"""
+        
         try:
             p1_inputs = self.sul.p1_inputs_from_trace(trace)
             hypothesis.reset_to_initial()
