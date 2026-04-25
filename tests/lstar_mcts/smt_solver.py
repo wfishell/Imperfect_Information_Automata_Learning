@@ -120,6 +120,16 @@ class TestSolve:
     """Tests for SMTValueAssigner.solve"""
 
     def test_solve_consistent_preferences(self, smt):
+        """
+        Tests Valid Preferences:
+        - ['A', 'Y', 'B', 'Y'] preferred over ['A', 'X', 'B', 'X'] (t1 > t2)
+        - ['A', 'X', 'B', 'X'] preferred over ['B', 'X', 'B', 'Y'] (t2 > t3)
+        - ['A', 'Y', 'B', 'Y'] preferred over ['B', 'X', 'B', 'Y'] (t1 > t3)
+
+        Expected Ordering: t1 > t2 > t3
+        
+        """
+
         # Add consistent preferences
         smt.add(['A', 'Y', 'B', 'Y'], ['A', 'X', 'B', 'X'], 't1')
         smt.add(['A', 'X', 'B', 'X'], ['B', 'X', 'B', 'Y'], 't1')
@@ -129,6 +139,23 @@ class TestSolve:
         assert values is not None, "Expected a solution for consistent preferences"
         assert all(0.0 <= v <= 1.0 for v in values.values()), "All values should be in the range [0, 1]"
 
+    def test_solve_inconsistent_preferences(self, smt):
+        """
+        Tests Inconsistent Preferences:
+        - ['A', 'Y', 'B', 'Y'] preferred over ['A', 'X', 'B', 'X'] (t1 > t2)
+        - ['A', 'X', 'B', 'X'] preferred over ['B', 'X', 'B', 'Y'] (t2 > t3)
+        - ['B', 'X', 'B', 'Y'] preferred over ['A', 'Y', 'B', 'Y'] (t3 > t1)
+
+        Expected Result: UNSATISFIABLE due to circular preferences
+        """
+
+        # Add inconsistent preferences
+        smt.add(['A', 'Y', 'B', 'Y'], ['A', 'X', 'B', 'X'], 't1')
+        smt.add(['A', 'X', 'B', 'X'], ['B', 'X', 'B', 'Y'], 't1')
+        smt.add(['B', 'X', 'B', 'Y'], ['A', 'Y', 'B', 'Y'], 't1')
+
+        values = smt.solve()
+        assert values is None, "Expected no solution for inconsistent preferences"
     pass
 
 
