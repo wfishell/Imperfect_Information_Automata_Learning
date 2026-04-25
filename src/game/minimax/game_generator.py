@@ -72,6 +72,7 @@ def compute_trace_scores(root: GameNode) -> list[tuple[list[str], int]]:
     return _collect(root, [], 0)
 
 
+# Untested Function Because It's Just Pretty Printing.
 def print_tree(node: GameNode, prefix: str = '', is_last: bool = True,
                action: str = None) -> None:
     """Pretty-print the game tree."""

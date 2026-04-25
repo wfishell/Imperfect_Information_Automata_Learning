@@ -154,11 +154,6 @@ class TestComputeTraceScores:
         assert scores[('B',)] == 6   # 1 + 5
 
 
-class TestPrintTree:
-    """Tests for print_tree"""
-    pass
-
-
 class TestTreeToDict:
     """Tests for tree_to_dict"""
     pass
