@@ -112,12 +112,6 @@ class SMTValueAssigner:
         else:
             self._last_values = {k: (v - lo) / (hi - lo) for k, v in raw.items()}
 
-        # DEBUG
-        print(f'SMT solve: {len(self._vars)} variables, {len(self._constraints)} constraints, '
-              f'{result}, values in [{lo:.4f}, {hi:.4f}]')
-        
-        print(f"Values: {dict(self._last_values)}")
-
         return dict(self._last_values)
 
     # ------------------------------------------------------------------

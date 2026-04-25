@@ -177,7 +177,6 @@ class TestSolve:
         assert values[('A', 'Y', 'B', 'Y')] > values[('A', 'X', 'B', 'X')], "Expected t1 to be greater than t2"
 
 
-
 class TestValue:
     """Tests for SMTValueAssigner.value"""
     pass
