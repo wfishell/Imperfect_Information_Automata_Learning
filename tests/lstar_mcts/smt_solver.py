@@ -138,6 +138,7 @@ class TestSolve:
         values = smt.solve()
         assert values is not None, "Expected a solution for consistent preferences"
         assert all(0.0 <= v <= 1.0 for v in values.values()), "All values should be in the range [0, 1]"
+        assert values[('A', 'Y', 'B', 'Y')] > values[('A', 'X', 'B', 'X')] > values[('B', 'X', 'B', 'Y')], "Expected ordering t1 > t2 > t3"
 
     def test_solve_inconsistent_preferences(self, smt):
         """
