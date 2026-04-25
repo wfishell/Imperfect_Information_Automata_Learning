@@ -38,9 +38,6 @@ class SMTValueAssigner:
     # ------------------------------------------------------------------
 
     def _var(self, trace: list[str] | tuple) -> z3.ArithRef:
-        # DEBUGGING
-        print("EXPECTED TRACE INPUT: ", trace, "\n")
-
         key = tuple(trace)
         if key not in self._vars:
             self._n += 1
@@ -49,9 +46,6 @@ class SMTValueAssigner:
             # Keep all values in [0, 100]
             self._solver.add(v >= 0)
             self._solver.add(v <= 100)
-
-        # DEBUGGING
-        print(f"RETURN VAR FOR TRACE: {key} → {self._vars[key]}\n")
 
         return self._vars[key]
 

@@ -26,6 +26,7 @@ class TestVar:
         - Example: "v1" for the first unique trace,
                    "v2" for the second unique trace, etc.
     """
+    
     def test_var_creation(self, smt):
             trace1 = ['B', 'X', 'B', 'Y']
             trace2 = ['B', 'X', 'B', 'Y']  # Same as trace1, should return same var
