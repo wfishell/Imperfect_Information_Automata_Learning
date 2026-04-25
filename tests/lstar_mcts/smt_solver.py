@@ -38,7 +38,13 @@ class TestVar:
             assert v1.eq(v2), "Same trace should return the same variable"
             assert v1.eq(v3) == False, "Different traces should return different variables"
 
+    def test_var_normalization(self, smt):
+        trace = ['B', 'X', 'B', 'Y']
+        v = smt._var(trace)
 
+        # Check that the variable has constraints to be between 0 and 100
+        assert any(str(c) == f'{v} >= 0' for c in smt._solver.assertions())                      
+        assert any(str(c) == f'{v} <= 100' for c in smt._solver.assertions())
 
 class TestAdd:
     """Tests for SMTValueAssigner.add"""
