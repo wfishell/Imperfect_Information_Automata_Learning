@@ -35,6 +35,13 @@ class TestGameNode:
         node.children['A'] = GameNode(value=3, player='P1', depth=2)
         assert node.is_terminal() == False
 
+    def test_children_not_shared(self):
+        # Ensure the dict default_factory creates a new dict for each instance
+        node1 = GameNode(value=1, player='P1', depth=0)
+        node2 = GameNode(value=2, player='P1', depth=0)
+        node1.children['A'] = GameNode(value=3, player='P2', depth=1)
+        assert 'A' not in node2.children
+
 
 class TestGenerateTree:
     """Tests for generate_tree"""
