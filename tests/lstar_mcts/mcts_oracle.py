@@ -110,11 +110,6 @@ class TestHypothesisOutput:
         assert result is None
 
 
-class TestCollectDepthNLeaves:
-    """Tests for MCTSEquivalenceOracle._collect_depth_n_leaves"""
-    pass
-
-
 class TestPruneAndUpdateTableB:
     """Tests for MCTSEquivalenceOracle._prune_and_update_table_b"""
     pass

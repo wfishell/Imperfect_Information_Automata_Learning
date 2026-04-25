@@ -374,7 +374,6 @@ class MCTSEquivalenceOracle(Oracle):
 
     def _hypothesis_output(self, hypothesis, trace: list[str]) -> str | None:
         """What does the current hypothesis say P2 should do at this trace?"""
-        
         try:
             p1_inputs = self.sul.p1_inputs_from_trace(trace)
             hypothesis.reset_to_initial()
@@ -385,15 +384,20 @@ class MCTSEquivalenceOracle(Oracle):
         except Exception:
             return None
 
-    def _collect_depth_n_leaves(self) -> list[tuple[list[str], str]]:
-        """Collect all (trace, action) pairs at depth N*2 for pruning."""
-        results = []
-        target = self.N * 2 - 1
-        for key in self.table_b._nodes:
-            if len(key) == target:
-                for action in self.table_b._nodes[key]:
-                    results.append((list(key), action))
-        return results
+    # Appears to never be called? Dead Code?
+    # def _collect_depth_n_leaves(self) -> list[tuple[list[str], str]]:
+    #     """Collect all (trace, action) pairs at depth N*2 for pruning."""
+    #     results = []
+    #     target = self.N * 2 - 1
+    #     for key in self.table_b._nodes:
+    #         if len(key) == target:
+    #             for action in self.table_b._nodes[key]:
+    #                 results.append((list(key), action))
+
+    #     # DEBUG
+    #     print(f'Collected {len(results)} depth-N leaves for pruning:'
+    #           f' {results[:5]}{"..." if len(results) > 5 else ""}')
+    #     return results
 
     def _prune_and_update_table_b(
         self,
