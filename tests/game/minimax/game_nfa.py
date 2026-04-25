@@ -36,17 +36,24 @@ class TestGetNode:
     """Tests for GameNFA.get_node"""
 
     def test_valid_trace(self, nfa):
+        # Case 1
         trace = ['B']
         node = nfa.get_node(trace)
         assert node is not None
         assert node.player == 'P2'
         assert node.value == 3
 
+        # Case 2
+        trace = ['A', 'X']
+        node = nfa.get_node(trace)
+        assert node is not None
+        assert node.player == 'P1'
+        assert node.value == 0
+
     def test_invalid_trace(self, nfa):
         trace = ['C']
         node = nfa.get_node(trace)
         assert node is None
-
 
 
 class TestIsTerminal:
@@ -63,7 +70,23 @@ class TestIsTerminal:
 
 class TestCurrentPlayer:
     """Tests for GameNFA.current_player"""
-    pass
+
+    def test_valid_trace(self, nfa):
+        # DEBUG
+        print(f"Tree: {generate_tree(depth=2, seed=42)}")
+
+        # P1 Case
+        trace = ['A']
+        assert nfa.current_player(trace) == 'P2'
+    
+        # P2 Case
+        trace = ['A', 'X']
+        assert nfa.current_player(trace) == None
+        # Terminal State → No current player (It would be P2 if the game continued)
+
+    def test_invalid_trace(self, nfa):
+        trace = ['C']
+        assert nfa.current_player(trace) is None
 
 
 class TestP2LegalMoves:
