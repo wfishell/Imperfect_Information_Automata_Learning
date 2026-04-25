@@ -30,7 +30,7 @@ from src.lstar_mcts.preference_oracle import PreferenceOracle
 from src.lstar_mcts.game_sul import GameSUL
 from src.lstar_mcts.table_b import TableB
 from src.lstar_mcts.mcts_oracle import MCTSEquivalenceOracle
-from src.scripts.random_game.learner import evaluate
+from src.scripts.minimax.learner import evaluate
 
 
 # -----------------------------------------------------------------------
