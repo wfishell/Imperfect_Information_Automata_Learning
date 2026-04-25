@@ -157,7 +157,25 @@ class TestSolve:
 
         values = smt.solve()
         assert values is None, "Expected no solution for inconsistent preferences"
-    pass
+    
+    def test_solve_equal_preferences(self, smt):
+        """
+        Tests Equal Preferences:
+        - ['A', 'Y', 'B', 'Y'] preferred over ['A', 'X', 'B', 'X'] (t1 > t2)
+        - ['A', 'Y', 'B', 'Y'] equal to ['B', 'X', 'B', 'Y'] (t1 == t3)
+
+        Expected Result: t1 and t3 should have the same value, both greater than t2
+        """
+
+        smt.add(['A', 'Y', 'B', 'Y'], ['A', 'X', 'B', 'X'], 't1')
+        smt.add(['A', 'Y', 'B', 'Y'], ['B', 'X', 'B', 'Y'], 'equal')
+
+        values = smt.solve()
+        assert values is not None, "Expected a solution for consistent preferences"
+        assert all(0.0 <= v <= 1.0 for v in values.values()), "All values should be in the range [0, 1]"
+        assert values[('A', 'Y', 'B', 'Y')] == values[('B', 'X', 'B', 'Y')], "Expected t1 and t3 to have the same value"
+        assert values[('A', 'Y', 'B', 'Y')] > values[('A', 'X', 'B', 'X')], "Expected t1 to be greater than t2"
+
 
 
 class TestValue:
