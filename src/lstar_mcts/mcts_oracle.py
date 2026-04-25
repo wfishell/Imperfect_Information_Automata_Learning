@@ -10,13 +10,12 @@ Each rollout:
     counterexamples
 
 After K rollouts the oracle:
-  1. Collects all Table A leaves (all P1 paths, hypothesis P2 choices, depth N)
-  2. Collects all Table B deviation leaves (depth N)
-  3. Feeds all n(n-1)/2 pairwise preferences across A ∪ B into the SMT solver
-  4. Updates Table B values from the SMT solution
-  5. Prunes depth-N Table B leaves below the median
-  6. Compares mean(Table B values) vs mean(Table A values)
-  7. If Table B mean > Table A mean + epsilon:
+  1. Collects all deviation leaves (depth N) and their Table A shadows
+  2. Feeds all pairwise preferences into the SMT solver
+  3. Updates Table B softmax probabilities from the SMT solution
+  4. Prunes depth-N Table B leaves below the median SMT value
+  5. For each deviation point, counts oracle.compare(dev_leaf, shadow) == 't1'
+  6. If majority (>50%) of pairs prefer the deviation:
        - updates the SUL strategy override at the best deviation point
        - returns the P1 input sequence as a counterexample to AALpy
 
@@ -45,7 +44,6 @@ class MCTSEquivalenceOracle(Oracle):
         K: int             = 200,
         epsilon: float     = 0.05,
         temperature: float = 1.0,
-        budget_threshold: float = 0.05,
         verbose: bool      = False,
     ) -> None:
         alphabet = list(nfa.root.children.keys())   # P1's top-level inputs
@@ -58,7 +56,6 @@ class MCTSEquivalenceOracle(Oracle):
         self.K                = K
         self.epsilon          = epsilon
         self.temperature      = temperature
-        self.budget_threshold = budget_threshold
         self.verbose          = verbose
 
         # {deviation_point (tuple): [trace_at_depth_N (list), ...]}
@@ -70,12 +67,14 @@ class MCTSEquivalenceOracle(Oracle):
 
     def _check_for_improvement(self, hypothesis) -> list[str] | None:
         """
-        SMT-based CEX check over deviation leaves vs their Table A shadows.
+        Majority-vote CEX check over deviation leaves vs their Table A shadows.
 
-        For each deviation point, collect its depth-N leaves and their shadows.
-        Build a fresh SMT instance over just those leaves (not all of Table B),
-        solve for consistent numeric values, then compare means.
-        If mean(dev) > mean(shadow) + epsilon, accept as counterexample.
+        For each deviation point, compare each depth-N deviation leaf directly
+        against its shadow using oracle.compare().  Accept as a counterexample
+        if a strict majority (>50%) of pairs prefer the deviation leaf.
+
+        SMT is still run over all leaves to update Table B softmax probabilities,
+        but the accept/reject decision is purely ordinal (no Z3 values involved).
         """
         from src.lstar_mcts.smt_solver import SMTValueAssigner
 
@@ -97,23 +96,28 @@ class MCTSEquivalenceOracle(Oracle):
             for leaf in leaves[:3]:
                 print(f'      {leaf}')
 
-        # --- Collect all (deviation, leaf, shadow) triples ---
-        triples: list[tuple[tuple, list, list]] = []
+        # --- Collect all (deviation, full leaf, shadow, cmp_leaf) tuples ---
+        # cmp_leaf is leaf truncated to shadow depth when the hypothesis
+        # terminates early; otherwise it equals the full leaf.
+        triples: list[tuple[tuple, list, list, list]] = []
         for deviation, dev_leaves in self._deviation_leaves.items():
             for leaf in dev_leaves:
                 shadow = self._shadow_trace(hypothesis, leaf)
-                if shadow is None or shadow == leaf:
+                if shadow is None:
                     continue
-                triples.append((deviation, leaf, shadow))
+                cmp_leaf = leaf[:len(shadow)] if len(shadow) < len(leaf) else leaf
+                if cmp_leaf == shadow:
+                    continue
+                triples.append((deviation, leaf, shadow, cmp_leaf))
 
         if not triples:
             return None
 
-        # --- Build fresh SMT over only these depth-N leaves ---
+        # --- Build fresh SMT over cmp_leaf/shadow pairs (for Table B only) ---
         unique_traces = list({
             tuple(t)
-            for _, leaf, shadow in triples
-            for t in (leaf, shadow)
+            for _, _leaf, shadow, cmp_leaf in triples
+            for t in (cmp_leaf, shadow)
         })
 
         smt = SMTValueAssigner()
@@ -123,71 +127,69 @@ class MCTSEquivalenceOracle(Oracle):
                 smt.add(list(t1), list(t2), pref)
 
         values = smt.solve()
-        if values is None:
-            if self.verbose:
-                print('  SMT unsatisfiable — skipping improvement check')
-            return None
 
         # --- Feed SMT values back into Table B ---
-        # Only update deviation leaves (not shadows — those are Table A traces).
-        # Explored deviations that scored poorly get lower softmax weight;
-        # those below the median are pruned from future rollouts entirely.
-        dev_leaf_keys = {
-            tuple(leaf)
-            for dev_leaves in self._deviation_leaves.values()
-            for leaf in dev_leaves
-        }
-        dev_smt_vals = [values[k] for k in dev_leaf_keys if k in values]
-        if dev_smt_vals:
-            median = sorted(dev_smt_vals)[len(dev_smt_vals) // 2]
-            for trace_key in dev_leaf_keys:
-                if trace_key not in values:
-                    continue
-                trace   = list(trace_key)
-                smt_val = values[trace_key]
-                self.table_b.update_value(trace[:-1], trace[-1], smt_val)
-                if smt_val < median:
-                    self.table_b.set_zero_prob(trace[:-1], trace[-1])
+        # Use cmp_leaf (the trace actually compared) to look up the SMT value,
+        # then write it to the Table B entry for that trace's last action.
+        if values is not None:
+            cmp_keys = {tuple(cmp_leaf) for _, _leaf, _shadow, cmp_leaf in triples}
+            cmp_smt_vals = [values[k] for k in cmp_keys if k in values]
+            if cmp_smt_vals:
+                median = sorted(cmp_smt_vals)[len(cmp_smt_vals) // 2]
+                for cmp_key in cmp_keys:
+                    if cmp_key not in values:
+                        continue
+                    trace   = list(cmp_key)
+                    smt_val = values[cmp_key]
+                    self.table_b.update_value(trace[:-1], trace[-1], smt_val)
+                    if smt_val < median:
+                        self.table_b.set_zero_prob(trace[:-1], trace[-1])
 
-        # --- Compare means per deviation ---
-        best_dev = None
-        best_adv = self.epsilon
+        # --- Majority vote per deviation ---
+        # Accept the deviation with the highest fraction of oracle-preferred leaves,
+        # provided that fraction strictly exceeds 0.5.
+        best_dev      = None
+        best_majority = 0.5   # must beat this to be accepted
 
         for deviation, dev_leaves in self._deviation_leaves.items():
-            dev_vals    = []
-            shadow_vals = []
+            n_total = 0
+            n_prefer_dev = 0
             for leaf in dev_leaves:
                 shadow = self._shadow_trace(hypothesis, leaf)
-                if shadow is None or shadow == leaf:
+                if shadow is None:
                     continue
-                dv = values.get(tuple(leaf))
-                sv = values.get(tuple(shadow))
-                if dv is not None and sv is not None:
-                    dev_vals.append(dv)
-                    shadow_vals.append(sv)
+                cmp_leaf = leaf[:len(shadow)] if len(shadow) < len(leaf) else leaf
+                if cmp_leaf == shadow:
+                    continue
+                pref = self.oracle.compare(cmp_leaf, shadow)
+                n_total += 1
+                if pref == 't1':
+                    n_prefer_dev += 1
 
-            if not dev_vals:
+            if n_total == 0:
                 continue
 
-            mean_dev    = sum(dev_vals)    / len(dev_vals)
-            mean_shadow = sum(shadow_vals) / len(shadow_vals)
-            adv = mean_dev - mean_shadow   # values already in [0,1] from SMT
-
+            majority = n_prefer_dev / n_total
             if self.verbose:
                 print(f'  deviation={list(deviation)}  '
-                      f'mean_dev={mean_dev:.3f}  mean_shadow={mean_shadow:.3f}  '
-                      f'adv={adv:.3f}  n={len(dev_vals)}')
-            if adv > best_adv:
-                best_adv = adv
+                      f'prefer_dev={n_prefer_dev}/{n_total}  '
+                      f'majority={majority:.3f}')
+            if majority > best_majority:
+                best_majority = majority
                 best_dev = deviation
 
         if best_dev is None:
             return None
 
-        best_leaf = max(
-            self._deviation_leaves[best_dev],
-            key=lambda l: values.get(tuple(l), 0.0),
-        )
+        # Rank by SMT value of cmp_leaf (truncated to shadow depth if needed).
+        def _leaf_smt_value(l: list) -> float:
+            shadow = self._shadow_trace(hypothesis, l)
+            if shadow is None or values is None:
+                return 0.0
+            cmp = l[:len(shadow)] if len(shadow) < len(l) else l
+            return values.get(tuple(cmp), 0.0)
+
+        best_leaf = max(self._deviation_leaves[best_dev], key=_leaf_smt_value)
         if len(best_leaf) <= len(best_dev):
             return None
 
@@ -227,85 +229,50 @@ class MCTSEquivalenceOracle(Oracle):
     # Single rollout
     # ------------------------------------------------------------------
 
-    def _rollout(self, hypothesis, remaining: dict) -> None:
-        trace: list[str] = []
-        active_deviation: tuple | None = None
+    def _rollout(self, hypothesis) -> None:
+        """
+        Branch on ALL P1 (environment) inputs; sample one P2 (system) action
+        per node from the Table B distribution.  A single call produces one
+        leaf per P1 input sequence combination up to depth N.
 
-        while len(trace) < self.N * 2:
+        Deviation tracking is per-path: when P2's sampled action first differs
+        from the hypothesis the deviation point is recorded, and subsequent P2
+        nodes on that path continue with free probabilistic exploration rather
+        than snapping back to the hypothesis.
+        """
+        def _recurse(trace: list[str], active_deviation: tuple | None) -> None:
+            if len(trace) >= self.N * 2:
+                if active_deviation is not None:
+                    self._deviation_leaves.setdefault(active_deviation, []).append(list(trace))
+                return
+
             node = self.nfa.get_node(trace)
             if node is None or node.is_terminal():
-                break
+                if active_deviation is not None and trace:
+                    self._deviation_leaves.setdefault(active_deviation, []).append(list(trace))
+                return
 
             available = list(node.children.keys())
 
             if node.player == 'P1':
-                action = self.table_b.best_action(trace, available)
+                for action in available:
+                    self.table_b.record_visit(trace, action)
+                    _recurse(trace + [action], active_deviation)
+            else:
+                hyp_output = self._hypothesis_output(hypothesis, trace)
+                action = self.table_b.sample_p2_action(trace, available, self.temperature)
                 if action is None:
                     action = random.choice(available)
 
-            else:
-                hyp_output = self._hypothesis_output(hypothesis, trace)
+                self.table_b.record_visit(trace, action)
 
-                if active_deviation is None:
-                    # No deviation yet — explore freely
-                    action = self.table_b.sample_p2_action(
-                        trace, available, self.temperature
-                    )
-                    if action is None:
-                        action = random.choice(available)
-                    # Detect first deviation
-                    if hyp_output and action != hyp_output:
-                        active_deviation = tuple(trace)
-                else:
-                    # Already deviated — follow hypothesis for all later P2 nodes
-                    # so the leaf differs from its shadow only at the one deviation point
-                    action = hyp_output if hyp_output in available else available[0]
+                new_deviation = active_deviation
+                if active_deviation is None and hyp_output is not None and action != hyp_output:
+                    new_deviation = tuple(trace)
 
-            self.table_b.record_visit(trace, action)
-            trace = trace + [action]
+                _recurse(trace + [action], new_deviation)
 
-            # Mid-exploration pruning
-            if active_deviation is not None:
-                if not self._budget_check(active_deviation, remaining):
-                    break
-
-        # Store deviation leaf
-        if active_deviation is not None and trace:
-            self._deviation_leaves.setdefault(active_deviation, []).append(list(trace))
-
-    # ------------------------------------------------------------------
-    # Mid-exploration pruning
-    # ------------------------------------------------------------------
-
-    def _budget_check(self, deviation: tuple, remaining: dict) -> bool:
-        """
-        Reduce budget for a deviation subtree based on Table B values from
-        the previous SMT round.  Return False to abandon this rollout.
-        """
-        leaf_list = self._deviation_leaves.get(deviation, [])
-        if len(leaf_list) < 4:
-            return True
-
-        # Use stored Table B values (from previous SMT round) to assess promise
-        vals = []
-        for leaf in leaf_list:
-            if len(leaf) >= 1:
-                stats = self.table_b.actions_at(leaf[:-1]).get(leaf[-1])
-                if stats is not None:
-                    vals.append(stats.value)
-
-        if not vals:
-            return True
-
-        mean_val = sum(vals) / len(vals)
-        if mean_val < 0.4:   # below neutral — subtree looks unpromising
-            budget = remaining.get(deviation, self.K)
-            budget *= 0.7
-            remaining[deviation] = budget
-            if budget < self.budget_threshold * self.K:
-                return False
-
-        return True
+        _recurse([], None)
 
     # ------------------------------------------------------------------
     # Table A leaf enumeration
