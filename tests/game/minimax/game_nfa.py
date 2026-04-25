@@ -120,7 +120,16 @@ class TestP2LegalMoves:
 
 class TestP2Left:
     """Tests for GameNFA.p2_left"""
-    pass
+    
+    def test_valid_trace(self, nfa):
+        trace = ['A']
+        legal_moves = nfa.p2_left(trace)
+        assert set(legal_moves) == {'X'}
+
+    def test_invalid_trace(self, nfa):
+        trace = ['C']
+        legal_moves = nfa.p2_left(trace)
+        assert legal_moves == None
 
 
 class TestP2Right:
