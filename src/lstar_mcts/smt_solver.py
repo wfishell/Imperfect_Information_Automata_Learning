@@ -10,7 +10,7 @@ The outside world only feeds in ordinal facts:
     add('t1', 't2', 'equal') →  value(t1) = value(t2)
 
 solve() returns a dict  trace_key → float  in the range [0, 1],
-normalised so the least preferred trace gets 0 and the most preferred gets 1.
+normalized so the least preferred trace gets 0 and the most preferred gets 1.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ class SMTValueAssigner:
     Incremental SMT solver that maps traces to consistent numeric values.
 
     Traces are identified by their action sequences (tuples of strings).
-    Values returned are always normalised to [0, 1].
+    Values returned are always normalized to [0, 1].
     """
 
     def __init__(self) -> None:
@@ -87,7 +87,7 @@ class SMTValueAssigner:
         """
         Find a consistent numeric assignment for all traces seen so far.
 
-        Returns a dict  trace_key → float ∈ [0, 1]  (normalised),
+        Returns a dict  trace_key → float ∈ [0, 1]  (normalized),
         or None if the constraints are unsatisfiable.
         """
         result = self._solver.check()
@@ -103,7 +103,7 @@ class SMTValueAssigner:
             else:
                 raw[key] = float(Fraction(str(z3_val)))
 
-        # Normalise to [0, 1]
+        # Normalize to [0, 1]
         if not raw:
             return {}
         lo, hi = min(raw.values()), max(raw.values())
@@ -165,7 +165,7 @@ if __name__ == '__main__':
     if values is None:
         print('UNSATISFIABLE — constraint contradiction')
     else:
-        print(f'\nNormalised SMT values (0=worst, 1=best):')
+        print(f'\nNormalized SMT values (0=worst, 1=best):')
         sorted_traces = sorted(values.items(), key=lambda x: -x[1])
         for trace_key, val in sorted_traces:
             trace_str = ' → '.join(trace_key)
