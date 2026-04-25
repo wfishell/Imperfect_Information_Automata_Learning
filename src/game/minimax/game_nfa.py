@@ -124,7 +124,7 @@ class GameNFA:
 
 if __name__ == '__main__':
     import sys
-    from src.game.game_generator import generate_tree, print_tree
+    from src.game.minimax.game_generator import generate_tree, print_tree
 
     depth = int(sys.argv[1]) if len(sys.argv) > 1 else 3
     seed  = int(sys.argv[2]) if len(sys.argv) > 2 else 42
