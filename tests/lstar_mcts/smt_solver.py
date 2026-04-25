@@ -118,6 +118,17 @@ class TestAdd:
 
 class TestSolve:
     """Tests for SMTValueAssigner.solve"""
+
+    def test_solve_consistent_preferences(self, smt):
+        # Add consistent preferences
+        smt.add(['A', 'Y', 'B', 'Y'], ['A', 'X', 'B', 'X'], 't1')
+        smt.add(['A', 'X', 'B', 'X'], ['B', 'X', 'B', 'Y'], 't1')
+        smt.add(['A', 'Y', 'B', 'Y'], ['B', 'X', 'B', 'Y'], 't1')
+
+        values = smt.solve()
+        assert values is not None, "Expected a solution for consistent preferences"
+        assert all(0.0 <= v <= 1.0 for v in values.values()), "All values should be in the range [0, 1]"
+
     pass
 
 
