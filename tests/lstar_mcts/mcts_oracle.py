@@ -42,9 +42,10 @@ class TestRollout:
     pass
 
 
-class TestBudgetCheck:
-    """Tests for MCTSEquivalenceOracle._budget_check"""
-    pass
+# Removed in Last Commit
+# class TestBudgetCheck:
+#     """Tests for MCTSEquivalenceOracle._budget_check"""
+#     pass
 
 # Will
 class TestShadowTrace:
