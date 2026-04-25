@@ -196,9 +196,6 @@ class TestStep:
         trace = ['A', 'X']  # Terminal state
         action = 'A'  # No legal moves from terminal state
         new_trace = nfa.step(trace, action)
-        assert new_trace is None
+        assert new_trace is None 
 
-
-class TestDescribeState:
-    """Tests for GameNFA.describe_state"""
-    pass
+# No Unit Tests for Display Functions. Not Prioritized as of now.
