@@ -96,7 +96,7 @@ def print_tree(node: GameNode, prefix: str = '', is_last: bool = True,
 
 
 def tree_to_dict(node: GameNode) -> dict:
-    """Serialise tree to a dict for JSON output."""
+    """Serialize tree to a dict for JSON output."""
     return {
         'value': node.value,
         'player': node.player,
@@ -109,7 +109,7 @@ def tree_to_dict(node: GameNode) -> dict:
 
 
 def tree_from_dict(d: dict) -> GameNode:
-    """Deserialise tree from a dict (e.g. loaded from JSON)."""
+    """Deserialize tree from a dict (e.g. loaded from JSON)."""
     node = GameNode(value=d['value'], player=d['player'], depth=d['depth'])
     for action, child_dict in d.get('children', {}).items():
         node.children[action] = tree_from_dict(child_dict)
