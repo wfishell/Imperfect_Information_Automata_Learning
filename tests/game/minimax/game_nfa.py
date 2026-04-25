@@ -91,7 +91,31 @@ class TestCurrentPlayer:
 
 class TestP2LegalMoves:
     """Tests for GameNFA.p2_legal_moves"""
-    pass
+    
+    def test_valid_trace(self, nfa):
+        trace = ['A']
+        legal_moves = nfa.p2_legal_moves(trace)
+        assert set(legal_moves) == {'X', 'Y'}
+
+    def test_not_p2_turn(self, nfa):
+        trace = ['A', 'X']
+        legal_moves = nfa.p2_legal_moves(trace)
+        assert legal_moves == []  # Not P2's turn
+
+    def test_terminal_state(self, nfa):
+        # We create a deeper tree to disambiguate between
+        # "Not P2's turn" and "Terminal state"
+        deeper_root = generate_tree(depth=3, seed=42)
+        deeper_nfa = GameNFA(deeper_root)
+
+        trace = ['A', 'X']
+        legal_moves = deeper_nfa.p2_legal_moves(trace)
+        assert legal_moves == []  # Terminal state → No legal moves
+
+    def test_invalid_trace(self, nfa):
+        trace = ['C']
+        legal_moves = nfa.p2_legal_moves(trace)
+        assert legal_moves == []
 
 
 class TestP2Left:
