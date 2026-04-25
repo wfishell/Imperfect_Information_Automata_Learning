@@ -33,10 +33,12 @@ class GameNFA:
     def get_node(self, trace: list[str]) -> GameNode | None:
         """Return the GameNode reached by following *trace* from the root."""
         node = self.root
+
         for action in trace:
             if action not in node.children:
                 return None
             node = node.children[action]
+
         return node
 
     def is_terminal(self, trace: list[str]) -> bool:
