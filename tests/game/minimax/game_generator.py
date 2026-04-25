@@ -123,10 +123,11 @@ class TestComputeTraceScores:
         for trace, _ in compute_trace_scores(root):
             assert len(trace) == 2
 
-    # def test_all_traces_unique(self):
-    #     root = generate_tree(depth=2, branching=2, seed=0)
-    #     traces = [tuple(t) for t, _ in compute_trace_scores(root)]
-    #     assert len(traces) == len(set(traces))
+    def test_all_traces_unique(self):
+        # Ensures all traces are unique.
+        root = generate_tree(depth=2, branching=2, seed=0)
+        traces = [tuple(t) for t, _ in compute_trace_scores(root)]
+        assert len(traces) == len(set(traces))
 
     # def test_scores_nonnegative(self):
     #     root = generate_tree(depth=3, branching=2, seed=0)
