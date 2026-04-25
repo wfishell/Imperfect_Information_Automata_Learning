@@ -88,7 +88,7 @@ def run_experiment(game_depth: int, depth_n: int, K: int, seed: int) -> list[dic
 
         remaining = {None: K}
         for _ in range(K):
-            eq._rollout(model, remaining)
+            eq._rollout(model)
 
         scores = evaluate(model, root)
         elapsed = time.perf_counter() - t0

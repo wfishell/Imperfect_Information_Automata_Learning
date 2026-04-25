@@ -109,7 +109,7 @@ def main():
 
         remaining = {None: args.K}
         for _ in range(args.K):
-            eq._rollout(model, remaining)
+            eq._rollout(model)
 
         viz.show_table_b(eq.table_b)
         viz.show_deviations(eq._deviation_leaves)

@@ -89,7 +89,7 @@ def main():
 
         remaining = {None: args.K}
         for _ in range(args.K):
-            eq_oracle._rollout(model, remaining)
+            eq_oracle._rollout(model)
 
         viz.show_table_b(eq_oracle.table_b)
         viz.show_deviations(eq_oracle._deviation_leaves)

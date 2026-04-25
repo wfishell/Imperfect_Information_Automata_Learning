@@ -102,7 +102,7 @@ def run_experiment(oracle_depth, depth_n: int, K: int, seed: int) -> list[dict]:
 
         remaining = {None: K}
         for _ in range(K):
-            eq._rollout(model, remaining)
+            eq._rollout(model)
 
         losses, draws, wins = _eval_vs_random(model, nfa, N_EVAL, seed=seed)
         elapsed = time.perf_counter() - t0

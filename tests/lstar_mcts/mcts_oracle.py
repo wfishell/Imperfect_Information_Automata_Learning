@@ -108,8 +108,3 @@ class TestHypothesisOutput:
 
         result = oracle._hypothesis_output(hypothesis, ['B', 'X', 'A'])
         assert result is None
-
-
-class TestPruneAndUpdateTableB:
-    """Tests for MCTSEquivalenceOracle._prune_and_update_table_b"""
-    pass

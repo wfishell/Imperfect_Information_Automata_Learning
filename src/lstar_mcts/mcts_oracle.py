@@ -82,19 +82,19 @@ class MCTSEquivalenceOracle(Oracle):
         if not b_leaves:
             return None
         
-        # DEBUG 
-        print(f'Checking for improvement: {len(self._deviation_leaves)} deviations, '
-              f'{len(b_leaves)} deviation leaves')
+        # # DEBUG 
+        # print(f'Checking for improvement: {len(self._deviation_leaves)} deviations, '
+        #       f'{len(b_leaves)} deviation leaves')
         
-        print('  Deviation points:')
-        for deviation in self._deviation_leaves:
-            print(f'    {deviation}')
+        # print('  Deviation points:')
+        # for deviation in self._deviation_leaves:
+        #     print(f'    {deviation}')
 
-        print('  Sample deviation leaves:')
-        for dev, leaves in self._deviation_leaves.items():
-            print(f'    Deviation {dev}:')
-            for leaf in leaves[:3]:
-                print(f'      {leaf}')
+        # print('  Sample deviation leaves:')
+        # for dev, leaves in self._deviation_leaves.items():
+        #     print(f'    Deviation {dev}:')
+        #     for leaf in leaves[:3]:
+        #         print(f'      {leaf}')
 
         # --- Collect all (deviation, full leaf, shadow, cmp_leaf) tuples ---
         # cmp_leaf is leaf truncated to shadow depth when the hypothesis
@@ -285,7 +285,7 @@ class MCTSEquivalenceOracle(Oracle):
         """
 
         # DEBUG 
-        print(f"  Finding shadow for deviation leaf: {deviation_leaf}: \n Hypothesis: {hypothesis}")
+        # print(f"  Finding shadow for deviation leaf: {deviation_leaf}: \n Hypothesis: {hypothesis}")
 
         shadow: list[str] = []
         node = self.nfa.root
@@ -352,6 +352,7 @@ class MCTSEquivalenceOracle(Oracle):
             return None
 
     # Appears to never be called? Dead Code?
+    # TODO: Reincorporate?
     # def _collect_depth_n_leaves(self) -> list[tuple[list[str], str]]:
     #     """Collect all (trace, action) pairs at depth N*2 for pruning."""
     #     results = []
@@ -366,42 +367,44 @@ class MCTSEquivalenceOracle(Oracle):
     #           f' {results[:5]}{"..." if len(results) > 5 else ""}')
     #     return results
 
-    def _prune_and_update_table_b(
-        self,
-        depth_n_leaves: list[tuple[list[str], str]],
-        a_leaves: list[list[str]],
-    ) -> None:
-        """
-        Update Table B values using normalized oracle scores (no SMT).
-        Prune depth-N leaves below the median score.
-        """
+    # Appears to never be called? Dead Code?
+    # TODO: Reincorporate?
+    # def _prune_and_update_table_b(
+    #     self,
+    #     depth_n_leaves: list[tuple[list[str], str]],
+    #     a_leaves: list[list[str]],
+    # ) -> None:
+    #     """
+    #     Update Table B values using normalized oracle scores (no SMT).
+    #     Prune depth-N leaves below the median score.
+    #     """
 
-        # DEBUG
-        print(f"Looking at leaves: {depth_n_leaves} and A leaves: {a_leaves}")
+    #     # DEBUG
+    #     print(f"Looking at leaves: {depth_n_leaves} and A leaves: {a_leaves}")
 
-        if not depth_n_leaves:
-            return
+    #     if not depth_n_leaves:
+    #         return
 
-        # Score each leaf via the oracle's internal _score (ordinal-only proxy)
-        scored = []
-        for trace, action in depth_n_leaves:
-            leaf = list(trace) + [action]
-            scored.append((trace, action, self.oracle._score(leaf)))
+    #     # Score each leaf via the oracle's internal _score (ordinal-only proxy)
+    #     scored = []
+    #     for trace, action in depth_n_leaves:
+    #         leaf = list(trace) + [action]
+    #         scored.append((trace, action, self.oracle._score(leaf)))
 
-        if not scored:
-            return
+    #     if not scored:
+    #         return
 
-        lo = min(s for _, _, s in scored)
-        hi = max(s for _, _, s in scored)
-        span = hi - lo if hi != lo else 1
+    #     lo = min(s for _, _, s in scored)
+    #     hi = max(s for _, _, s in scored)
+    #     span = hi - lo if hi != lo else 1
 
-        for trace, action, raw in scored:
-            v = (raw - lo) / span
-            self.table_b.update_value(trace, action, v)
+    #     for trace, action, raw in scored:
+    #         v = (raw - lo) / span
+    #         self.table_b.update_value(trace, action, v)
 
-        # Prune below median
-        vals = [s for _, _, s in scored]
-        median = sorted(vals)[len(vals) // 2]
-        for trace, action, raw in scored:
-            if raw < median:
-                self.table_b.set_zero_prob(trace, action)
+    #     # Prune below median
+    #     vals = [s for _, _, s in scored]
+    #     median = sorted(vals)[len(vals) // 2]
+    #     for trace, action, raw in scored:
+    #         if raw < median:
+    #             self.table_b.set_zero_prob(trace, action)

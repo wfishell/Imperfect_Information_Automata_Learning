@@ -67,7 +67,7 @@ def main():
 
         remaining = {None: args.K}
         for _ in range(args.K):
-            eq._rollout(model, remaining)
+            eq._rollout(model)
 
         improvement = eq._check_for_improvement(model)
         print(f'states={len(model.states)}', end='  ')

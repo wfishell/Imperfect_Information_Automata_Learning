@@ -92,7 +92,7 @@ def main():
         # Note: _deviation_leaves persists across rounds so evidence accumulates
         remaining = {None: args.K}
         for _ in range(args.K):
-            eq_oracle._rollout(model, remaining)
+            eq_oracle._rollout(model)
 
         # Check if any deviation beats its shadow — if so, update oracle and restart
         improvement = eq_oracle._check_for_improvement(model)
