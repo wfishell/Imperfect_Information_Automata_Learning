@@ -51,7 +51,14 @@ class TestGetNode:
 
 class TestIsTerminal:
     """Tests for GameNFA.is_terminal"""
-    pass
+    
+    def test_terminal_state(self, nfa):
+        trace = ['A', 'X']
+        assert nfa.is_terminal(trace) == True
+
+    def test_non_terminal_state(self, nfa):
+        trace = ['A']
+        assert nfa.is_terminal(trace) == False
 
 
 class TestCurrentPlayer:
