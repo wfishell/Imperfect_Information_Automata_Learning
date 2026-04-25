@@ -10,8 +10,9 @@ cache.json
 src/viz/diagrams/*.dot
 src/viz/diagrams/*.png
 
-# Generated strategy files in project root
-learned_strategy_*.dot
+# Generated strategy files
+outputs/
+!outputs/.gitkeep
 
 # Environment
 .env

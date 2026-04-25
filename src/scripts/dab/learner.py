@@ -120,8 +120,10 @@ def main():
     print(f'  wins={wins}  draws={draws}  losses={losses}')
     print(f'  win rate={wins/n:.1%}  loss rate={losses/n:.1%}')
 
-    out = Path('learned_strategy_dab.dot')
-    model.save(str(out))
+    out_dir = Path(__file__).parents[3] / 'outputs'
+    out_dir.mkdir(exist_ok=True)
+    out = out_dir / 'learned_strategy_dab.dot'
+    model.save(str(out_dir / 'learned_strategy_dab'))
     print(f'Saved: {out}')
 
 

@@ -7,6 +7,7 @@ Usage:
 """
 
 import argparse
+from pathlib import Path
 from aalpy.learning_algs import run_Lstar
 from aalpy.utils import visualize_automaton
 
@@ -121,8 +122,10 @@ def main():
     print()
     print(table_b.summary())
 
-    model.save('learned_strategy')
-    print('Saved: learned_strategy.dot')
+    out_dir = Path(__file__).parents[3] / 'outputs'
+    out_dir.mkdir(exist_ok=True)
+    model.save(str(out_dir / 'learned_strategy'))
+    print(f'Saved: {out_dir / "learned_strategy.dot"}')
 
 
 def evaluate(model, root) -> dict:

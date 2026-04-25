@@ -8,6 +8,7 @@ Usage:
 
 import argparse
 import random
+from pathlib import Path
 from aalpy.learning_algs import run_Lstar
 
 from src.game.tic_tac_toe.game_nfa import TicTacToeNFA
@@ -73,8 +74,10 @@ def main():
     print()
     print(table_b.summary())
 
-    model.save('learned_strategy_ttt')
-    print('Saved: learned_strategy_ttt.dot')
+    out_dir = Path(__file__).parents[3] / 'outputs'
+    out_dir.mkdir(exist_ok=True)
+    model.save(str(out_dir / 'learned_strategy_ttt'))
+    print(f'Saved: {out_dir / "learned_strategy_ttt.dot"}')
 
 
 def evaluate_vs_random(model, nfa: TicTacToeNFA, n_games: int = 500,
