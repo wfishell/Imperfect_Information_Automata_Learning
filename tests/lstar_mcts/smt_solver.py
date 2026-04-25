@@ -193,18 +193,3 @@ class TestValue:
 
         for trace_key, expected_value in values.items():
             assert smt.value(trace_key) == expected_value, f"Expected value for {trace_key} to match solve() output"
-
-
-class TestIsSatisfiable:
-    """Tests for SMTValueAssigner.is_satisfiable"""
-    pass
-
-
-class TestNConstraints:
-    """Tests for SMTValueAssigner.n_constraints"""
-    pass
-
-
-class TestKnownTraces:
-    """Tests for SMTValueAssigner.known_traces"""
-    pass
