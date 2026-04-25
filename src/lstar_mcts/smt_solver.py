@@ -120,6 +120,7 @@ class SMTValueAssigner:
 
     def value(self, trace: list[str] | tuple) -> float | None:
         """Return the last solved value for *trace*, or None if unseen."""
+
         return self._last_values.get(tuple(trace))
 
     def is_satisfiable(self) -> bool:

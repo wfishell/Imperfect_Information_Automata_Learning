@@ -179,7 +179,20 @@ class TestSolve:
 
 class TestValue:
     """Tests for SMTValueAssigner.value"""
-    pass
+    
+    def test_value_after_solve(self, smt):
+        """
+        Tests that the value method returns the same values as the last solve() call.
+        """
+
+        smt.add(['A', 'Y', 'B', 'Y'], ['A', 'X', 'B', 'X'], 't1')
+        smt.add(['A', 'X', 'B', 'X'], ['B', 'X', 'B', 'Y'], 't1')
+
+        values = smt.solve()
+        assert values is not None, "Expected a solution for consistent preferences"
+
+        for trace_key, expected_value in values.items():
+            assert smt.value(trace_key) == expected_value, f"Expected value for {trace_key} to match solve() output"
 
 
 class TestIsSatisfiable:
