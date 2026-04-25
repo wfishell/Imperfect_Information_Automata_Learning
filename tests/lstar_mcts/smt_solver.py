@@ -26,7 +26,7 @@ class TestVar:
         - Example: "v1" for the first unique trace,
                    "v2" for the second unique trace, etc.
     """
-    
+
     def test_var_creation(self, smt):
             trace1 = ['B', 'X', 'B', 'Y']
             trace2 = ['B', 'X', 'B', 'Y']  # Same as trace1, should return same var
@@ -48,7 +48,27 @@ class TestVar:
         assert any(str(c) == f'{v} <= 100' for c in smt._solver.assertions())
 
 class TestAdd:
-    """Tests for SMTValueAssigner.add"""
+    """Tests for SMTValueAssigner.add
+    
+    Inputs: Two traces and a preference indicating which trace is considered more optimal:
+        - t1: ['A', 'Y', 'B', 'Y'] 
+        - t2: ['A', 'X', 'B', 'X']
+        - Preference: 't2'
+    """
+
+    def test_add_preference(self, smt):
+        trace1 = ['A', 'Y', 'B', 'Y']
+        trace2 = ['A', 'X', 'B', 'X']
+        preference = 't2'
+
+        smt.add(trace1, trace2, preference)
+
+        v1 = smt._var(trace1)
+        v2 = smt._var(trace2)
+
+        # Check that the correct constraint was added based on the preference
+        assert any(str(c) == f'{v2} > {v1}' for c in smt._solver.assertions()), "Preference 't2' should add constraint v1 < v2"
+
     pass
 
 

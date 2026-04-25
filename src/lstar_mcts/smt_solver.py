@@ -64,6 +64,9 @@ class SMTValueAssigner:
                          't2'   → trace2 preferred
                          'equal'→ no preference
         """
+        # DEBUG
+        print(f'Adding preference: {trace1} {preference} {trace2}')
+
         v1 = self._var(trace1)
         v2 = self._var(trace2)
         key = (tuple(trace1), tuple(trace2), preference)
