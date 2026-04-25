@@ -129,16 +129,16 @@ class TestComputeTraceScores:
         traces = [tuple(t) for t, _ in compute_trace_scores(root)]
         assert len(traces) == len(set(traces))
 
-    # def test_scores_nonnegative(self):
-    #     root = generate_tree(depth=3, branching=2, seed=0)
-    #     for _, score in compute_trace_scores(root):
-    #         assert score >= 0
+    def test_scores_nonnegative(self):
+        root = generate_tree(depth=3, branching=2, seed=0)
+        for _, score in compute_trace_scores(root):
+            assert score >= 0
 
-    # def test_single_node_tree(self):
-    #     # depth=0 → root is terminal, one trace with empty path
-    #     root = GameNode(value=7, player='P1', depth=0)
-    #     traces = compute_trace_scores(root)
-    #     assert traces == [([], 7)]
+    def test_single_node_tree(self):
+        # depth=0 → root is terminal, one trace with empty path
+        root = GameNode(value=7, player='P1', depth=0)
+        traces = compute_trace_scores(root)
+        assert traces == [([], 7)]
 
     # def test_known_scores_on_hand_built_tree(self):
     #     # Build a depth-1 tree with known values
