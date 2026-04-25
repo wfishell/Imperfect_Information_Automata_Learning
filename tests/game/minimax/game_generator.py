@@ -27,6 +27,13 @@ class TestGameNode:
         assert node.player == 'P1'
         assert node.depth == 2
         assert node.children == {}
+    
+    def test_is_terminal(self):
+        node = GameNode(value=5, player='P2', depth=1)
+        assert node.is_terminal() == True
+        
+        node.children['A'] = GameNode(value=3, player='P1', depth=2)
+        assert node.is_terminal() == False
 
 
 class TestGenerateTree:
