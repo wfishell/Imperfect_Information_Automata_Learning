@@ -56,9 +56,22 @@ class TestAdd:
         - Preference: 't2'
     """
 
-    def test_add_preference(self, smt):
+    def tets_add_preference_t1(self, smt):
         trace1 = ['A', 'Y', 'B', 'Y']
         trace2 = ['A', 'X', 'B', 'X']
+        preference = 't1'
+
+        smt.add(trace1, trace2, preference)
+
+        v1 = smt._var(trace1)
+        v2 = smt._var(trace2)
+
+        # Check that the correct constraint was added based on the preference
+        assert any(str(c) == f'{v1} > {v2}' for c in smt._solver.assertions()), "Preference 't1' should add constraint v1 > v2"
+
+    def test_add_preference_t2(self, smt):
+        trace1 = ['B', 'X', 'B', 'Y']
+        trace2 = ['A', 'Y', 'B', 'Y']
         preference = 't2'
 
         smt.add(trace1, trace2, preference)
@@ -69,8 +82,39 @@ class TestAdd:
         # Check that the correct constraint was added based on the preference
         assert any(str(c) == f'{v2} > {v1}' for c in smt._solver.assertions()), "Preference 't2' should add constraint v1 < v2"
 
-    pass
+    def test_add_preference_t1(self, smt):
+        trace1 = ['B', 'X', 'B', 'X']
+        trace2 = ['B', 'Y', 'B', 'X']
+        preference = 't1'
 
+        smt.add(trace1, trace2, preference)
+
+        v1 = smt._var(trace1)
+        v2 = smt._var(trace2)
+
+        # Check that the correct constraint was added based on the preference
+        assert any(str(c) == f'{v1} > {v2}' for c in smt._solver.assertions()), "Preference 't1' should add constraint v1 > v2"
+
+    def test_add_preference_equal(self, smt):
+        trace1 = ['A', 'Y', 'A', 'X']
+        trace2 = ['B', 'X', 'A', 'Y']
+        preference = 'equal'
+
+        smt.add(trace1, trace2, preference)
+
+        v1 = smt._var(trace1)
+        v2 = smt._var(trace2)
+
+        # Check that the correct constraint was added based on the preference
+        assert any(str(c) == f'{v1} == {v2}' for c in smt._solver.assertions()), "Preference 'equal' should add constraint v1 == v2"
+
+    def test_fall_through(self, smt):
+        trace1 = ['A', 'Y', 'A', 'X']
+        trace2 = ['B', 'X', 'A', 'Y']
+        preference = 'invalid'
+
+        with pytest.raises(ValueError, match="Unknown preference"):
+            smt.add(trace1, trace2, preference)
 
 class TestSolve:
     """Tests for SMTValueAssigner.solve"""
