@@ -372,9 +372,13 @@ class MCTSEquivalenceOracle(Oracle):
         a_leaves: list[list[str]],
     ) -> None:
         """
-        Update Table B values using normalised oracle scores (no SMT).
+        Update Table B values using normalized oracle scores (no SMT).
         Prune depth-N leaves below the median score.
         """
+
+        # DEBUG
+        print(f"Looking at leaves: {depth_n_leaves} and A leaves: {a_leaves}")
+
         if not depth_n_leaves:
             return
 
