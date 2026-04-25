@@ -97,12 +97,12 @@ class TestP2LegalMoves:
         legal_moves = nfa.p2_legal_moves(trace)
         assert set(legal_moves) == {'X', 'Y'}
 
-    def test_not_p2_turn(self, nfa):
+    def test_terminal_state(self, nfa):
         trace = ['A', 'X']
         legal_moves = nfa.p2_legal_moves(trace)
-        assert legal_moves == []  # Not P2's turn
+        assert legal_moves == []  # Terminal state → No legal moves
 
-    def test_terminal_state(self, nfa):
+    def test_not_p2_turn(self, nfa):
         # We create a deeper tree to disambiguate between
         # "Not P2's turn" and "Terminal state"
         deeper_root = generate_tree(depth=3, seed=42)
@@ -110,7 +110,7 @@ class TestP2LegalMoves:
 
         trace = ['A', 'X']
         legal_moves = deeper_nfa.p2_legal_moves(trace)
-        assert legal_moves == []  # Terminal state → No legal moves
+        assert legal_moves == []  # Not P2's turn → No legal moves
 
     def test_invalid_trace(self, nfa):
         trace = ['C']
@@ -148,7 +148,27 @@ class TestP2Right:
 
 class TestP1LegalInputs:
     """Tests for GameNFA.p1_legal_inputs"""
-    pass
+
+    def test_valid_trace(self, nfa):
+        trace = []  # root is a P1 node
+        legal_inputs = nfa.p1_legal_inputs(trace)
+        assert set(legal_inputs) == {'A', 'B'}
+
+    def test_not_p1_turn(self, nfa):
+        trace = ['A']  # P2's turn after P1 plays 'A'
+        legal_inputs = nfa.p1_legal_inputs(trace)
+        assert legal_inputs == []
+
+    def test_terminal_state(self, nfa):
+        trace = ['A', 'X']  # P1 node but not terminal in depth-2, terminal in depth-3
+        legal_inputs = nfa.p1_legal_inputs(trace)
+        assert legal_inputs == []  # terminal state → no legal inputs
+
+    def test_invalid_trace(self, nfa):
+        trace = ['C']
+        legal_inputs = nfa.p1_legal_inputs(trace)
+        assert legal_inputs == []
+
 
 
 class TestStep:
