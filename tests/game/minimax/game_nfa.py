@@ -170,10 +170,33 @@ class TestP1LegalInputs:
         assert legal_inputs == []
 
 
-
 class TestStep:
     """Tests for GameNFA.step"""
-    pass
+    
+    def test_valid_step(self, nfa):
+        # Step 1
+        trace = []
+        action = 'A'
+        new_trace = nfa.step(trace, action)
+        assert new_trace == ['A']
+
+        # Step 2
+        trace = ['A']
+        action = 'X'
+        new_trace = nfa.step(trace, action)
+        assert new_trace == ['A', 'X']
+    
+    def test_invalid_step(self, nfa):
+        trace = []
+        action = 'C'  # Not a legal input at root
+        new_trace = nfa.step(trace, action)
+        assert new_trace is None
+
+    def test_step_from_terminal_state(self, nfa):
+        trace = ['A', 'X']  # Terminal state
+        action = 'A'  # No legal moves from terminal state
+        new_trace = nfa.step(trace, action)
+        assert new_trace is None
 
 
 class TestDescribeState:
