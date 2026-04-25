@@ -156,7 +156,32 @@ class TestComputeTraceScores:
 
 class TestTreeToDict:
     """Tests for tree_to_dict"""
-    pass
+
+    def test_single_node_keys(self):
+        node = GameNode(value=4, player='P1', depth=0)
+        d = tree_to_dict(node)
+        assert set(d.keys()) == {'value', 'player', 'depth', 'children'}
+
+    def test_single_node_field_values(self):
+        node = GameNode(value=4, player='P1', depth=0)
+        d = tree_to_dict(node)
+        assert d['value'] == 4
+        assert d['player'] == 'P1'
+        assert d['depth'] == 0
+        assert d['children'] == {}
+
+    def test_children_serialized_recursively(self):
+        root  = GameNode(value=1, player='P1', depth=0)
+        child = GameNode(value=2, player='P2', depth=1)
+        root.children['A'] = child
+        d = tree_to_dict(root)
+        assert 'A' in d['children']
+        assert d['children']['A']['value'] == 2
+        assert d['children']['A']['player'] == 'P2'
+
+    def test_round_trip(self):
+        root = generate_tree(depth=2, seed=42)
+        assert tree_to_dict(tree_from_dict(tree_to_dict(root))) == tree_to_dict(root)
 
 
 class TestTreeFromDict:
