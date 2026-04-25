@@ -68,7 +68,7 @@ def compute_trace_scores(root: GameNode) -> list[tuple[list[str], int]]:
         for action, child in node.children.items():
             results.extend(_collect(child, path + [action], score))
         return results
-
+            
     return _collect(root, [], 0)
 
 

@@ -107,7 +107,50 @@ class TestGenerateTree:
 
 class TestComputeTraceScores:
     """Tests for compute_trace_scores"""
-    pass
+
+    def test_trace_count(self):
+        # depth=2, branching=2 → 2^2 = 4 leaves
+        root = generate_tree(depth=2, branching=2, seed=0)
+        traces = compute_trace_scores(root)
+
+        assert len(traces) == 4
+
+    def test_trace_length(self):
+        # Question to be asked here:
+        # Should the action count be the same as depth?
+        # Ex. P1 -> P2 -> terminal -> 2 actions, depth=2
+        root = generate_tree(depth=2, branching=2, seed=0)
+        for trace, _ in compute_trace_scores(root):
+            assert len(trace) == 2
+
+    # def test_all_traces_unique(self):
+    #     root = generate_tree(depth=2, branching=2, seed=0)
+    #     traces = [tuple(t) for t, _ in compute_trace_scores(root)]
+    #     assert len(traces) == len(set(traces))
+
+    # def test_scores_nonnegative(self):
+    #     root = generate_tree(depth=3, branching=2, seed=0)
+    #     for _, score in compute_trace_scores(root):
+    #         assert score >= 0
+
+    # def test_single_node_tree(self):
+    #     # depth=0 → root is terminal, one trace with empty path
+    #     root = GameNode(value=7, player='P1', depth=0)
+    #     traces = compute_trace_scores(root)
+    #     assert traces == [([], 7)]
+
+    # def test_known_scores_on_hand_built_tree(self):
+    #     # Build a depth-1 tree with known values
+    #     root  = GameNode(value=1, player='P1', depth=0)
+    #     left  = GameNode(value=3, player='P2', depth=1)
+    #     right = GameNode(value=5, player='P2', depth=1)
+    #     root.children['A'] = left
+    #     root.children['B'] = right
+
+    #     traces = compute_trace_scores(root)
+    #     scores = {tuple(t): s for t, s in traces}
+    #     assert scores[('A',)] == 4   # 1 + 3
+    #     assert scores[('B',)] == 6   # 1 + 5
 
 
 class TestPrintTree:
