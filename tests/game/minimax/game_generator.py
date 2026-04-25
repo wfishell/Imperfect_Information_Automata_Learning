@@ -140,18 +140,18 @@ class TestComputeTraceScores:
         traces = compute_trace_scores(root)
         assert traces == [([], 7)]
 
-    # def test_known_scores_on_hand_built_tree(self):
-    #     # Build a depth-1 tree with known values
-    #     root  = GameNode(value=1, player='P1', depth=0)
-    #     left  = GameNode(value=3, player='P2', depth=1)
-    #     right = GameNode(value=5, player='P2', depth=1)
-    #     root.children['A'] = left
-    #     root.children['B'] = right
+    def test_known_scores_on_hand_built_tree(self):
+        # Build a depth-1 tree with known values
+        root  = GameNode(value=1, player='P1', depth=0)
+        left  = GameNode(value=3, player='P2', depth=1)
+        right = GameNode(value=5, player='P2', depth=1)
+        root.children['A'] = left
+        root.children['B'] = right
 
-    #     traces = compute_trace_scores(root)
-    #     scores = {tuple(t): s for t, s in traces}
-    #     assert scores[('A',)] == 4   # 1 + 3
-    #     assert scores[('B',)] == 6   # 1 + 5
+        traces = compute_trace_scores(root)
+        scores = {tuple(t): s for t, s in traces}
+        assert scores[('A',)] == 4   # 1 + 3
+        assert scores[('B',)] == 6   # 1 + 5
 
 
 class TestPrintTree:
