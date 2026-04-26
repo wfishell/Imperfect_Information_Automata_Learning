@@ -27,9 +27,58 @@ def oracle():
     return MCTSEquivalenceOracle(sul, nfa, pref, table, depth_N=2)
 
 # Will
-class TestCheckForImprovement:
-    """Tests for MCTSEquivalenceOracle._check_for_improvement"""
-    pass
+class TestCheckRollout:
+    def test_hypothesis_trace_generator(self):
+        #Generating sub traces from hypothesis language
+        #TODO Check that it is generating traces properly
+        return None
+
+    def test_deviation_points_reflect_ucb_scores(self):
+        #TODO Check that the deviation points return
+        #Reflected inversly to the UCB Scores
+        return None
+
+    def test_collect_deviation_traces_over_P1_actions(self):
+        #TODO Check that the player one moves are over all input space on sub tree
+        return None
+
+    ### NEED TO BUILD TEST FUNCTIONS FOR THESE THINGS ###
+    # TODO: test that CollectTraces returns None when only one action is available at deviation point
+    # TODO: test that sampled deviation action is never the same as SubTrace[-1]
+    # TODO: test that all returned traces end on a P2 action (never P1)
+    # TODO: test that 'Terminal' is appended and zero_prob set when game ends after P1 action
+    # TODO: test that P2 visits are recorded for all actions at each P2 node visited
+    # TODO: test that returned traces have length <= depth_N * 2 (from deviation point)
+    # TODO: test that P1 branching produces one trace per legal P1 action at each frontier step
+    # TODO: test that completed traces are included in the return alongside frontier traces
+    # TODO: assert that NFA_Node returned by get_current_state matches expected node for known trace
+    # TODO: assert that current_state returned by get_current_state matches expected hypothesis state for known trace
+    # TODO: assert that all returned traces in Generate_Hypothesis_Language start with SubTrace
+    # TODO: assert that all returned traces end on a P2 action (never P1)
+    # TODO: assert that returned trace count equals branching_factor^depth_N for a complete tree
+    # TODO: assert that terminal traces are collected and not expanded further
+    # TODO: assert that hypothesis outputs in returned traces match direct hypothesis.step() calls
+    # TODO: assert that AssertionError is raised when a P2 node is encountered mid-BFS
+
+    # TODO: test GenerateCounterExample returns (SubTrace, CE_Traces, majority) tuple
+    # TODO: test GenerateCounterExample majority is True when CE traces are consistently preferred
+    # TODO: test GenerateCounterExample majority is False when hypothesis traces are consistently preferred
+
+    # TODO: test AssignPreferencesAndPreferenceValues returns majority=False when total_count=0
+    # TODO: test AssignPreferencesAndPreferenceValues values dict contains both CE and HE trace keys
+    # TODO: test AssignPreferencesAndPreferenceValues returns None values when constraints are contradictory
+
+    # TODO: test PropagateValuesThroughTableB leaf values are written to Table B correctly
+    # TODO: test PropagateValuesThroughTableB parent values equal average of children after propagation
+    # TODO: test PropagateValuesThroughTableB stops propagating at SubTrace and does not go above it
+    # TODO: test PropagateValuesThroughTableB handles single leaf trace correctly
+
+    # TODO: test GenerateSubTrace returns trace ending on P2 action
+    # TODO: test GenerateSubTrace returns full trace when no deviation candidates found (empty Table B)
+    # TODO: test GenerateSubTrace chosen deviation index is biased toward low UCB weight actions
+
+    # TODO: test get_current_state on empty trace returns root node and initial hypothesis state
+    # TODO: test get_current_state stops correctly at terminal node mid-trace
 
 
 class TestFindCex:
@@ -60,12 +109,6 @@ class TestCollectTableALeaves:
 
 class TestHypothesisOutput:
     """Tests for MCTSEquivalenceOracle._hypothesis_output
-    
-    Asserts that the method:
-
-    1. Strips player 2 inputs from trace.
-    2. Resets the hypothesis to initial state.
-    3. Steps through the hypothesis using the player 1 inputs, returning the final output.
 
     Specifically looks at minimax as test:
     ```
