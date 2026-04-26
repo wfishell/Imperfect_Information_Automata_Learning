@@ -87,7 +87,6 @@ def main():
 
         viz.show_hypothesis(model, p1_inputs)
 
-        remaining = {None: args.K}
         for _ in range(args.K):
             eq_oracle._rollout(model)
 

@@ -90,7 +90,6 @@ def main():
         )
         # MCTS: run K rollouts on the converged hypothesis
         # Note: _deviation_leaves persists across rounds so evidence accumulates
-        remaining = {None: args.K}
         for _ in range(args.K):
             eq_oracle._rollout(model)
 

@@ -142,7 +142,7 @@ class TableB:
             if stats.visits == 0:
                 weights.append(10.0)           # high prior for unexplored
             else:
-                weights.append(math.exp(stats.value / temperature))
+                weights.append(math.exp(self.ucb_score(trace, a, live) / temperature))
 
         total = sum(weights)
         probs = [w / total for w in weights]

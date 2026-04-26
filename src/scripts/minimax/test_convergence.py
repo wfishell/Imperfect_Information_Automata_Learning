@@ -86,7 +86,6 @@ def run_experiment(game_depth: int, depth_n: int, K: int, seed: int) -> list[dic
             cache_and_non_det_check=False,
         )
 
-        remaining = {None: K}
         for _ in range(K):
             eq._rollout(model)
 

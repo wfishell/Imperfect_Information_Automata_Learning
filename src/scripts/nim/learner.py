@@ -65,7 +65,6 @@ def main():
             cache_and_non_det_check=False,
         )
 
-        remaining = {None: args.K}
         for _ in range(args.K):
             eq._rollout(model)
 

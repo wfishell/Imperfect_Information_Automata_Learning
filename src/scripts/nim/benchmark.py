@@ -43,21 +43,23 @@ from src.lstar_mcts.mcts_oracle import MCTSEquivalenceOracle
 # Experiment parameters
 # -----------------------------------------------------------------------
 
-ORACLE_DEPTHS = [1, 2, 3, None]
-K_VALUES      = [50, 100, 200]
+ORACLE_DEPTHS = [0, 1, 2, 3]      # oracle lookahead depth (0 = greedy)
+K_VALUES      = [1, 10, 50, 100]
 DEPTH_NS      = [2, 4, 6]
 SEEDS         = [0, 1, 2]
 PILE_CONFIGS  = [(1, 2, 3), (2, 3, 4), (3, 4, 5)]
 
-N_EVAL     = 200
-EPSILON    = 0.05
+N_EVAL        = 200
+EVAL_EPSILON  = 0.2    # P1 plays randomly with this probability during evaluation
+EPSILON       = 0.05
 MAX_ROUNDS = 10
 
 DIAGRAMS_DIR = Path(__file__).parents[1] / 'viz' / 'diagrams'
 
-K_COLORS     = {50: '#e41a1c', 100: '#ff7f00', 200: '#377eb8'}
-DN_COLORS    = {2: '#e41a1c',  4: '#ff7f00',   6: '#377eb8'}
-PILE_COLORS  = {
+K_COLORS    = {1: '#e41a1c', 10: '#ff7f00', 50: '#4daf4a', 100: '#377eb8'}
+DN_COLORS   = {2: '#e41a1c',  4: '#ff7f00',   6: '#377eb8'}
+OD_COLORS   = {0: '#e41a1c',  1: '#ff7f00',   2: '#4daf4a', 3: '#377eb8'}
+PILE_COLORS = {
     (1,2,3): '#4daf4a',
     (2,3,4): '#984ea3',
     (3,4,5): '#ff7f00',
@@ -103,11 +105,10 @@ def run_experiment(piles: tuple, oracle_depth,
             cache_and_non_det_check=False,
         )
 
-        remaining = {None: K}
         for _ in range(K):
             eq._rollout(model)
 
-        losses, draws, wins = _eval_vs_random(model, nfa, N_EVAL, seed=seed)
+        losses, draws, wins = _eval_vs_adversarial(model, nfa, N_EVAL, seed=seed)
         elapsed = time.perf_counter() - t0
 
         history.append({
@@ -124,9 +125,10 @@ def run_experiment(piles: tuple, oracle_depth,
     return history
 
 
-def _eval_vs_random(model, nfa: NimNFA,
-                    n_games: int, seed: int) -> tuple[int, int, int]:
-    """Return (losses, draws, wins) for learned P2 vs random P1."""
+def _eval_vs_adversarial(model, nfa: NimNFA,
+                          n_games: int, seed: int) -> tuple[int, int, int]:
+    """Return (losses, draws, wins) for learned P2 vs epsilon-greedy adversarial P1."""
+    adversary = NimOracle(nfa, depth=None)
     rng = random.Random(seed)
     losses = draws = wins = 0
 
@@ -135,7 +137,14 @@ def _eval_vs_random(model, nfa: NimNFA,
         model.reset_to_initial()
 
         while not state.is_terminal():
-            p1_move = rng.choice(list(state.children.keys()))
+            available = list(state.children.keys())
+            if rng.random() < EVAL_EPSILON:
+                p1_move = rng.choice(available)
+            else:
+                p1_move = min(
+                    available,
+                    key=lambda mv: adversary._minimax(state.children[mv], None),
+                )
             p2_move = model.step(p1_move)
             state   = state.children[p1_move]
 
@@ -143,7 +152,7 @@ def _eval_vs_random(model, nfa: NimNFA,
                 break
 
             if p2_move not in state.children:
-                p2_move = rng.choice(list(state.children.keys()))
+                p2_move = next(iter(state.children))
             state = state.children[p2_move]
 
         w = state.winner()
@@ -191,15 +200,16 @@ def run_all(pile_configs, oracle_depths, k_values, depth_ns, seeds):
 
 def normalise(results, pile_configs, oracle_depths, k_values, depth_ns, seeds):
     """
-    Add 'normalised' key: raw_score / optimal_raw_score
-    where optimal = oracle_depth=None for the same (piles, depth_n, K, seed).
+    Add 'normalised' key: raw_score / reference_raw_score
+    where reference = deepest oracle_depth for the same (piles, depth_n, K, seed).
     """
+    ref_od = max(oracle_depths)
     for piles in pile_configs:
         for od in oracle_depths:
             for dn in depth_ns:
                 for K in k_values:
                     for seed in seeds:
-                        opt_hist  = results.get((piles, None, dn, K, seed), [])
+                        opt_hist  = results.get((piles, ref_od, dn, K, seed), [])
                         opt_score = opt_hist[-1]['raw_score'] if opt_hist else None
 
                         hist = results.get((piles, od, dn, K, seed), [])
@@ -216,13 +226,17 @@ def normalise(results, pile_configs, oracle_depths, k_values, depth_ns, seeds):
 # Plotting helpers
 # -----------------------------------------------------------------------
 
-def _plot_sweep(results, param_values, param_colors, param_label,
-                oracle_depths, seeds, metric, ylabel, ax_grid):
-    for ri, od in enumerate(oracle_depths):
-        od_str = str(od) if od is not None else '∞'
+def _plot_sweep(results_slice, param_values, param_colors, param_label,
+                row_values, row_title_fn, seeds, metric, ylabel, ax_grid):
+    """
+    Generic sweep plotter.
+    results_slice : dict keyed by (row_value, param_value, seed)
+    row_title_fn  : callable(row_value) -> str for subplot title
+    """
+    for ri, rv in enumerate(row_values):
         for ci, seed in enumerate(seeds):
             ax = ax_grid[ri][ci]
-            ax.set_title(f'oracle_depth={od_str}  seed={seed}', fontsize=8)
+            ax.set_title(f'{row_title_fn(rv)}  seed={seed}', fontsize=8)
             ax.set_xlabel('MCTS round', fontsize=7)
             ax.set_ylabel(ylabel, fontsize=7)
             ax.tick_params(labelsize=6)
@@ -233,7 +247,7 @@ def _plot_sweep(results, param_values, param_colors, param_label,
                 ax.set_ylim(-0.05, 1.15)
 
             for pv in param_values:
-                hist = results.get((od, pv, seed)) or []
+                hist = results_slice.get((rv, pv, seed)) or []
                 if not hist:
                     continue
                 xs = [e['round'] for e in hist]
@@ -248,57 +262,92 @@ def _plot_sweep(results, param_values, param_colors, param_label,
 def make_figures(results, pile_configs, oracle_depths, k_values, depth_ns, seeds,
                  fixed_k=100, fixed_dn=None, out_prefix='nim'):
     """
-    Five figures:
-      {prefix}_score_K.png      — normalised score, vary K      ([1,2,3], fix depth_n)
-      {prefix}_states_K.png     — automaton states, vary K
-      {prefix}_score_dn.png     — normalised score, vary depth_n ([1,2,3], fix K)
-      {prefix}_states_dn.png    — automaton states, vary depth_n
-      {prefix}_score_piles.png  — score vs oracle_depth, rows=pile_config (scaling)
+    Nine figures (piles=[1,2,3]):
+      Rows = oracle_depths:
+        {prefix}_score_K.png      — normalised score, vary K      (fix depth_n)
+        {prefix}_states_K.png     — automaton states, vary K
+        {prefix}_score_dn.png     — normalised score, vary depth_n (fix K)
+        {prefix}_states_dn.png    — automaton states, vary depth_n
+
+      Rows = depth_ns:
+        {prefix}_score_K_dn.png   — normalised score, vary K      (fix oracle_depth)
+        {prefix}_states_K_dn.png  — automaton states, vary K
+        {prefix}_score_od_dn.png  — normalised score, vary oracle_depth (fix K)
+        {prefix}_states_od_dn.png — automaton states, vary oracle_depth
+
+      Scaling:
+        {prefix}_score_piles.png  — score vs oracle_depth, rows=pile_config
     """
     DIAGRAMS_DIR.mkdir(parents=True, exist_ok=True)
 
-    fdn      = fixed_dn if fixed_dn is not None else max(d for d in depth_ns)
+    fdn        = fixed_dn if fixed_dn is not None else max(depth_ns)
+    fod        = max(oracle_depths)
     base_piles = (1, 2, 3)
 
-    n_rows  = len(oracle_depths)
-    n_cols  = len(seeds)
-    figsize = (4 * n_cols, 3.5 * n_rows)
+    od_title = lambda od: f'oracle_depth={od}'
+    dn_title = lambda dn: f'depth_n={dn}'
 
     for metric, ylabel, suffix in [
         ('normalised', 'Normalised score  (1.0 = matches optimal oracle)', 'score'),
         ('states',     'Automaton states',                                  'states'),
     ]:
-        # --- Vary K (fix depth_n = fdn, piles = [1,2,3]) ---
+        n_od_rows = len(oracle_depths)
+        n_dn_rows = len(depth_ns)
+        n_cols    = len(seeds)
+        od_figsize = (4 * n_cols, 3.5 * n_od_rows)
+        dn_figsize = (4 * n_cols, 3.5 * n_dn_rows)
+
+        # --- Rows=oracle_depths: vary K (fix depth_n=fdn) ---
         k_slice = {
             (od, K, seed): results.get((base_piles, od, fdn, K, seed), [])
             for od, K, seed in itertools.product(oracle_depths, k_values, seeds)
         }
-        fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize,
+        fig, axes = plt.subplots(n_od_rows, n_cols, figsize=od_figsize,
                                   squeeze=False, constrained_layout=True)
-        fig.suptitle(f'{ylabel}  —  varying K  (depth_n={fdn}, piles={list(base_piles)})',
-                     fontsize=10)
+        fig.suptitle(f'{ylabel}  —  varying K  (depth_n={fdn}, piles={list(base_piles)})', fontsize=10)
         _plot_sweep(k_slice, k_values, K_COLORS, 'K',
-                    oracle_depths, seeds, metric, ylabel, axes)
+                    oracle_depths, od_title, seeds, metric, ylabel, axes)
         path = DIAGRAMS_DIR / f'{out_prefix}_{suffix}_K.png'
-        fig.savefig(path, dpi=120)
-        plt.close(fig)
-        print(f'Saved: {path}')
+        fig.savefig(path, dpi=120); plt.close(fig); print(f'Saved: {path}')
 
-        # --- Vary depth_n (fix K = fixed_k, piles = [1,2,3]) ---
+        # --- Rows=oracle_depths: vary depth_n (fix K=fixed_k) ---
         dn_slice = {
             (od, dn, seed): results.get((base_piles, od, dn, fixed_k, seed), [])
             for od, dn, seed in itertools.product(oracle_depths, depth_ns, seeds)
         }
-        fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize,
+        fig, axes = plt.subplots(n_od_rows, n_cols, figsize=od_figsize,
                                   squeeze=False, constrained_layout=True)
-        fig.suptitle(f'{ylabel}  —  varying depth_n  (K={fixed_k}, piles={list(base_piles)})',
-                     fontsize=10)
+        fig.suptitle(f'{ylabel}  —  varying depth_n  (K={fixed_k}, piles={list(base_piles)})', fontsize=10)
         _plot_sweep(dn_slice, depth_ns, DN_COLORS, 'depth_n',
-                    oracle_depths, seeds, metric, ylabel, axes)
+                    oracle_depths, od_title, seeds, metric, ylabel, axes)
         path = DIAGRAMS_DIR / f'{out_prefix}_{suffix}_dn.png'
-        fig.savefig(path, dpi=120)
-        plt.close(fig)
-        print(f'Saved: {path}')
+        fig.savefig(path, dpi=120); plt.close(fig); print(f'Saved: {path}')
+
+        # --- Rows=depth_ns: vary K (fix oracle_depth=fod) ---
+        k_dn_slice = {
+            (dn, K, seed): results.get((base_piles, fod, dn, K, seed), [])
+            for dn, K, seed in itertools.product(depth_ns, k_values, seeds)
+        }
+        fig, axes = plt.subplots(n_dn_rows, n_cols, figsize=dn_figsize,
+                                  squeeze=False, constrained_layout=True)
+        fig.suptitle(f'{ylabel}  —  varying K  by depth_n  (oracle_depth={fod})', fontsize=10)
+        _plot_sweep(k_dn_slice, k_values, K_COLORS, 'K',
+                    depth_ns, dn_title, seeds, metric, ylabel, axes)
+        path = DIAGRAMS_DIR / f'{out_prefix}_{suffix}_K_dn.png'
+        fig.savefig(path, dpi=120); plt.close(fig); print(f'Saved: {path}')
+
+        # --- Rows=depth_ns: vary oracle_depth (fix K=fixed_k) ---
+        od_dn_slice = {
+            (dn, od, seed): results.get((base_piles, od, dn, fixed_k, seed), [])
+            for dn, od, seed in itertools.product(depth_ns, oracle_depths, seeds)
+        }
+        fig, axes = plt.subplots(n_dn_rows, n_cols, figsize=dn_figsize,
+                                  squeeze=False, constrained_layout=True)
+        fig.suptitle(f'{ylabel}  —  varying oracle_depth  by depth_n  (K={fixed_k})', fontsize=10)
+        _plot_sweep(od_dn_slice, oracle_depths, OD_COLORS, 'oracle_depth',
+                    depth_ns, dn_title, seeds, metric, ylabel, axes)
+        path = DIAGRAMS_DIR / f'{out_prefix}_{suffix}_od_dn.png'
+        fig.savefig(path, dpi=120); plt.close(fig); print(f'Saved: {path}')
 
     # --- Pile scaling: score vs oracle_depth, rows=pile_config ---
     n_piles = len(pile_configs)
