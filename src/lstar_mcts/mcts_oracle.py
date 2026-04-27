@@ -28,7 +28,7 @@ from aalpy.base import Oracle
 
 from src.lstar_mcts.smt_solver import SMTValueAssigner
 from src.game.minimax.game_nfa import GameNFA
-from src.lstar_mcts.preference_oracle import PreferenceOracle
+from src.game.minimax.preference_oracle import PreferenceOracle
 from src.lstar_mcts.game_sul import GameSUL
 from src.lstar_mcts.table_b import TableB
 

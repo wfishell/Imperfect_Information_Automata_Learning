@@ -6,7 +6,7 @@ Run Instructions:
 """
 
 import pytest
-from src.lstar_mcts.preference_oracle import PreferenceOracle
+from src.game.minimax.preference_oracle import PreferenceOracle
 from src.game.minimax.game_generator import generate_tree
 from src.game.minimax.game_nfa import GameNFA
 from src.game.minimax.game_generator import GameNode

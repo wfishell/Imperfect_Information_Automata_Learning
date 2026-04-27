@@ -141,7 +141,7 @@ if __name__ == '__main__':
     import sys
     from src.game.minimax.game_generator import generate_tree, compute_trace_scores
     from src.game.minimax.game_nfa import GameNFA
-    from src.lstar_mcts.preference_oracle import PreferenceOracle
+    from src.game.minimax.preference_oracle import PreferenceOracle
 
     depth = int(sys.argv[1]) if len(sys.argv) > 1 else 4
     seed  = int(sys.argv[2]) if len(sys.argv) > 2 else 42

@@ -14,7 +14,7 @@ from aalpy.learning_algs import run_Lstar
 
 from src.game.minimax.game_generator import generate_tree, print_tree
 from src.game.minimax.game_nfa import GameNFA
-from src.lstar_mcts.preference_oracle import PreferenceOracle
+from src.game.minimax.preference_oracle import PreferenceOracle
 from src.lstar_mcts.game_sul import GameSUL
 from src.lstar_mcts.table_b import TableB
 from src.lstar_mcts.mcts_oracle import MCTSEquivalenceOracle
