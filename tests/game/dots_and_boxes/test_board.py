@@ -38,8 +38,6 @@ from src.game.dots_and_boxes.board import (
     )
 
 
-# New Unit Tests
-
 class TestEdgeIndexing:
     def test_h_edge_indices(self):
         # 2 x 2 Grid:
@@ -88,19 +86,14 @@ class TestBoxesCompletedBy:
                  True, True, True, False, False, False)
         assert _boxes_completed_by(edges, 7, 2, 2) == 2
 
-
-# Original LLM Generated Tests
+# ---------------------------------------------------------------------------
+# DotsAndBoxesState Functionality Tests
+# ---------------------------------------------------------------------------
 
 def make_state(moves: list[int]) -> DotsAndBoxesState:
     state = DotsAndBoxesState()
     for move in moves:
         state = state.children[move]
-        # DEBUG
-        print(f"After move {move}:\n player={state.player},\n "
-              f"p1_boxes={state.p1_boxes}, p2_boxes={state.p2_boxes},\n edges={state.edges}\n")
-
-    # DEBUG
-    print(f"Made state with moves {moves}:\n states:")
 
     return state
 
@@ -282,7 +275,7 @@ def test_non_terminal_value_zero():
 
 
 # ---------------------------------------------------------------------------
-# Parameterised grid sizes
+# Parameterized grid sizes
 # ---------------------------------------------------------------------------
 
 def test_initial_children_count_3x3():
