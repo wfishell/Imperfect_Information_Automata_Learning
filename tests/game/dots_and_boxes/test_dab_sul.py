@@ -114,7 +114,45 @@ class TestStepNormalAlternation:
 # ---------------------------------------------------------------------------
 
 class TestStepP2ExtraTurn:
-    pass
+    """
+    box(0,0) borders: 0, 2, 6, 7.
+    We force P2 to play 2 (via override) after P1 plays 0, giving _real_trace=[0,2].
+    P1 then plays 6; the oracle is guaranteed to play 7 (completing box(0,0)),
+    confirmed by test_preference_oracle::test_takes_box_immediately.
+    After that step, state.player=='P2' — P2 earned an extra turn.
+    """
+
+    def _drive_to_p2_extra_turn(self, sul) -> int:
+        """Set up the SUL so P2 just completed box(0,0) and holds the turn.
+        Returns the output of the completing step (should be 7)."""
+        sul.pre()
+        sul._overrides[(0,)] = 2          # force P2 to play 2 after P1 plays 0
+        sul.step(0)                        # P1:0 → P2:2 (override). _real_trace=[0,2]
+        return sul.step(6)                 # P1:6 → P2:7 (oracle). _real_trace=[0,2,6,7]
+
+    def test_completing_step_returns_completing_edge(self, sul):
+        assert self._drive_to_p2_extra_turn(sul) == 7
+
+    def test_state_player_is_p2_after_completion(self, sul):
+        self._drive_to_p2_extra_turn(sul)
+        assert sul._state.player == 'P2'
+
+    def test_pass_input_returns_legal_edge(self, sul):
+        self._drive_to_p2_extra_turn(sul)
+        extra = sul.step(PASS)
+        assert extra != PASS
+        assert extra in set(range(12))
+
+    def test_extra_move_appended_to_real_trace(self, sul):
+        self._drive_to_p2_extra_turn(sul)
+        sul.step(PASS)
+        # _real_trace should now contain [0, 2, 6, 7, <extra_move>]
+        assert len(sul._real_trace) == 5
+
+    def test_extra_move_not_already_drawn(self, sul):
+        self._drive_to_p2_extra_turn(sul)
+        extra = sul.step(PASS)
+        assert extra not in {0, 2, 6, 7}  # all four already drawn
 
 
 # ---------------------------------------------------------------------------
