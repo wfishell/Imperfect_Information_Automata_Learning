@@ -28,13 +28,48 @@ Run: python -m pytest tests/game/dots_and_boxes/test_board.py -v
 """
 
 import pytest
-from src.game.dots_and_boxes.board import DotsAndBoxesState
+from src.game.dots_and_boxes.board import (
+    DotsAndBoxesState,
+    _h_edge,
+    _v_edge
+    )
 
+
+# New Unit Tests
+
+class TestEdgeIndexing:
+    def test_h_edge_indices(self):
+        # 2 x 2 Grid:
+        assert _h_edge(0, 0, 2) == 0
+        assert _h_edge(0, 1, 2) == 1
+        assert _h_edge(1, 0, 2) == 2
+        assert _h_edge(1, 1, 2) == 3
+        assert _h_edge(2, 0, 2) == 4
+        assert _h_edge(2, 1, 2) == 5
+
+    def test_v_edge_indices(self):
+        # 2 x 2 Grid, vertical edges start at index 6:
+        assert _v_edge(0, 0, 2, 2) == 6
+        assert _v_edge(0, 1, 2, 2) == 7
+        assert _v_edge(0, 2, 2, 2) == 8
+        assert _v_edge(1, 0, 2, 2) == 9
+        assert _v_edge(1, 1, 2, 2) == 10
+        assert _v_edge(1, 2, 2, 2) == 11
+
+
+# Original LLM Generated Tests
 
 def make_state(moves: list[int]) -> DotsAndBoxesState:
     state = DotsAndBoxesState()
     for move in moves:
         state = state.children[move]
+        # DEBUG
+        print(f"After move {move}:\n player={state.player},\n "
+              f"p1_boxes={state.p1_boxes}, p2_boxes={state.p2_boxes},\n edges={state.edges}\n")
+
+    # DEBUG
+    print(f"Made state with moves {moves}:\n states:")
+
     return state
 
 
