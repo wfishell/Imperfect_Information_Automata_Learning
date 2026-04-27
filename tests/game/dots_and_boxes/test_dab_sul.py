@@ -243,7 +243,37 @@ class TestStepTerminal:
 # ---------------------------------------------------------------------------
 
 class TestStrategyOverrides:
-    pass
+    def test_update_strategy_registers_override(self, sul):
+        sul.update_strategy([0], 5)
+        assert sul._overrides[(0,)] == 5
+
+    def test_update_strategy_overwrites_existing(self, sul):
+        sul.update_strategy([0], 5)
+        sul.update_strategy([0], 3)
+        assert sul._overrides[(0,)] == 3
+
+    def test_current_strategy_returns_override_when_set(self, sul):
+        sul.update_strategy([0], 5)
+        assert sul.current_strategy([0]) == 5
+
+    def test_current_strategy_falls_back_to_oracle(self, sul):
+        # No override at [0,2,6] — oracle is guaranteed to return 7
+        assert sul.current_strategy([0, 2, 6]) == 7
+
+    def test_step_uses_override(self, sul):
+        # Force P2 to play edge 3 after P1 plays edge 0
+        sul.pre()
+        sul.update_strategy([0], 3)
+        result = sul.step(0)
+        assert result == 3
+
+    def test_overrides_persist_across_pre(self, sul):
+        # pre() resets game state but must NOT clear overrides —
+        # MCTS patches are durable across membership queries
+        sul.update_strategy([0], 5)
+        sul.pre()
+        assert (0,) in sul._overrides
+        assert sul._overrides[(0,)] == 5
 
 
 # ---------------------------------------------------------------------------
