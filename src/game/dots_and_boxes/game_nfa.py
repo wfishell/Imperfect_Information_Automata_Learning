@@ -20,9 +20,9 @@ class DotsAndBoxesNFA:
         for action in trace:
             if state is None or state.is_terminal():
                 return None
-            if action == PASS:
+            if action == PASS: # Pass only legal when a player has an extra turn.
                 continue
-            if action not in state.children:
+            if action not in state.children: # Illegal Move
                 return None
             state = state.children[action]
         return state
