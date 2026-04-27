@@ -14,6 +14,7 @@ PASS mechanic:
 """
 
 import pytest
+from src.game.dots_and_boxes.board import DotsAndBoxesState
 from src.game.dots_and_boxes.game_nfa import DotsAndBoxesNFA, PASS
 from src.game.dots_and_boxes.preference_oracle import DotsAndBoxesOracle
 from src.game.dots_and_boxes.dab_sul import DotsAndBoxesSUL
@@ -207,7 +208,34 @@ class TestStepP1ExtraTurn:
 # ---------------------------------------------------------------------------
 
 class TestStepTerminal:
-    pass
+    def test_step_on_already_terminal_returns_pass(self, sul):
+        # Inject a terminal state directly — all edges drawn, no children
+        sul.pre()
+        sul._state = DotsAndBoxesState(edges=(True,) * 12, p1_boxes=2, p2_boxes=2)
+        assert sul.step(0) == PASS
+
+    def test_step_does_not_advance_state_on_terminal(self, sul):
+        sul.pre()
+        terminal = DotsAndBoxesState(edges=(True,) * 12, p1_boxes=2, p2_boxes=2)
+        sul._state = terminal
+        sul.step(0)
+        assert sul._state is terminal
+
+    def test_step_does_not_modify_real_trace_on_terminal(self, sul):
+        sul.pre()
+        sul._state = DotsAndBoxesState(edges=(True,) * 12, p1_boxes=2, p2_boxes=2)
+        sul.step(0)
+        assert sul._real_trace == []
+
+    def test_last_edge_makes_state_terminal(self, sul):
+        # Inject a state with only edge 11 remaining — P1 draws it
+        sul.pre()
+        sul._state = DotsAndBoxesState(
+            edges=(True,) * 11 + (False,), p1_boxes=2, p2_boxes=1, player='P1'
+        )
+        result = sul.step(11)
+        assert result == PASS
+        assert sul._state.is_terminal()
 
 
 # ---------------------------------------------------------------------------
