@@ -24,6 +24,7 @@ Table B persists across all equivalence queries.
 
 from __future__ import annotations
 import random
+import time
 from aalpy.base import Oracle
 
 from src.lstar_mcts.smt_solver import SMTValueAssigner
@@ -41,9 +42,8 @@ class MCTSEquivalenceOracle(Oracle):
         nfa: GameNFA,
         oracle: PreferenceOracle,
         table_b: TableB,
-        hypothesis,
-        max_trace_length: int,
         depth_N: int,
+        max_trace_length: int = 20,
         K: int             = 200,
         epsilon: float     = 0.05,
         temperature: float = 1.0,
@@ -55,29 +55,64 @@ class MCTSEquivalenceOracle(Oracle):
         self.nfa              = nfa
         self.oracle           = oracle
         self.table_b          = table_b
-        self.N                = depth_N
+        self.depth_N          = depth_N
+        self.max_trace_length = max_trace_length
         self.K                = K
         self.epsilon          = epsilon
         self.temperature      = temperature
         self.verbose          = verbose
-        self.hypotheisis = hypothesis
-        self.max_trace_length = max_trace_length
+        self.hypothesis       = None  # set at the start of each find_cex call
+        self.last_cex_p1: list[str] = []  # P1 inputs of last returned CEX
 
         # {deviation_point (tuple): [trace_at_depth_N (list), ...]}
         self._deviation_leaves: dict[tuple, list[list[str]]] = {}
     
+    def find_cex(self, hypothesis):
+        self.hypothesis = hypothesis
+        self.num_queries += 1
+
+        for i in range(self.K):
+            subtrace, ce_traces, majority, deviation_action = self.GenerateCounterExample()
+            print(f'[rollout {i}] subtrace_len={len(subtrace)}  ce_traces={"None" if ce_traces is None else len(ce_traces)}  majority={majority if ce_traces is not None else "-"}')
+
+            if ce_traces is None:
+                continue
+
+            if majority:
+                print('updating strategy...')
+                deviation_start = len(subtrace) - 1
+                for trace in ce_traces:
+                    for j in range(deviation_start, len(trace), 2):
+                        self.sul.update_strategy(trace[:j], trace[j])
+                cex = self.sul.p1_inputs_from_trace(subtrace)
+                self.last_cex_p1 = cex
+                print('returning cex...')
+                return cex
+
+        return None
 
     def GenerateCounterExample(self):                                                                                                                                                                                                                                       
       SubTrace = self.GenerateSubTrace()                                                                                          
 
-      CE_Traces = self.CollectTraces(SubTrace)                                                                                                                                                                                                                            
+      t0 = time.perf_counter()
+      CE_Traces, deviation_action = self.CollectTraces(SubTrace)
+      print(f'  CollectTraces:          {time.perf_counter()-t0:.3f}s  traces={len(CE_Traces) if CE_Traces else None}')
+      if CE_Traces is None:
+          return SubTrace, None, False, None
+
+      t0 = time.perf_counter()
       Hypothesis_Traces = self.Generate_Hypothesis_Language(SubTrace)
-                                                                                                                                                                                                                                                                          
+      print(f'  GenerateHypothesis:     {time.perf_counter()-t0:.3f}s  traces={len(Hypothesis_Traces)}')
+
+      t0 = time.perf_counter()
       values, majority = self.AssignPreferencesAndPreferenceValues(Hypothesis_Traces, CE_Traces)
-                                                                                                                                                                                                                                                                          
-      self.PropagateValuesThroughTableB(SubTrace, values)                                                                                                                                                                                                                 
-   
-      return SubTrace, CE_Traces, majority 
+      print(f'  AssignPreferences:      {time.perf_counter()-t0:.3f}s')
+
+      t0 = time.perf_counter()
+      self.PropagateValuesThroughTableB(SubTrace, values)
+      print(f'  PropagateValues:        {time.perf_counter()-t0:.3f}s')
+
+      return SubTrace, CE_Traces, majority, deviation_action
 
 
     def get_current_state(self, trace: list[str]) -> tuple:                                                                                                                                                                                                                         
@@ -91,42 +126,41 @@ class MCTSEquivalenceOracle(Oracle):
               break                                                                                                                                                                                                                                                               
       return node, self.hypothesis.current_state
 
-    def GenerateSubTrace(self) -> list[str]:          
-      self.hypothesis.reset_to_initial()                                                                                          
-      node = self.nfa.root
-      trace = []                                                                                                                                                                                                                      
-      deviation_candidates = []  # (p2_action_index, weight)                                                                                                                                                                          
-                                                                                                                                                                                                                                      
-      while len(trace) < self.Max_Trace_Length and node is not None and not node.is_terminal():                                                                                                                                       
-          if node.player == 'P1':
-              action = random.choice(list(node.children.keys()))                                                                                                                                                                      
-              p2_response = self.hypothesis.step(action)
-                                                                                                                                                                                                                                      
-              action_space = list(self.table_b.actions_at(trace).keys())
-              if action_space:
-                  total_score = sum(self.table_b.ucb_score(trace, a, action_space) for a in action_space)                                                                                                                             
-                  if total_score > 0:
-                      weight = self.table_b.ucb_score(trace, p2_response, action_space) / total_score                                                                                                                                 
-                      p2_index = len(trace) + 1                                                                                                                                                                                       
-                      deviation_candidates.append((p2_index, weight))
-                                                                                                                                                                                                                                      
-              trace.append(action)                                                                                                                                                                                                    
-              node = node.children[action]
-              if node is None or node.is_terminal():                                                                                                                                                                                  
-                  break
-              trace.append(p2_response)
-              node = node.children.get(p2_response)
-          else:
-              break
+    def GenerateSubTrace(self) -> list[str]:
+        self.hypothesis.reset_to_initial()
+        node = self.nfa.root
+        trace = []
+        deviation_candidates = []  # (index_into_trace, weight)
 
-      if not deviation_candidates:                                                                                                                                                                                                    
-          return trace
-                                                                                                                                                                                                                                      
-      indices, weights = zip(*deviation_candidates)
-      inverse_weights = [1.0 / (w + 1e-9) for w in weights]
-      chosen_index = random.choices(indices, weights=inverse_weights, k=1)[0]
-                                                                                                                                                                                                                                      
-      return trace[:chosen_index + 1]
+        while len(trace) < self.max_trace_length and node is not None and not node.is_terminal():
+            if node.player == 'P1':
+                action = random.choice(list(node.children.keys()))
+                p2_response = self.hypothesis.step(action)
+
+                trace.append(action)
+                node = node.children[action]
+
+                action_space = list(self.table_b.actions_at(trace).keys())
+                if action_space:
+                    total_score = sum(self.table_b.ucb_score(trace, a, action_space) for a in action_space)
+                    weight = self.table_b.ucb_score(trace, p2_response, action_space) / total_score if total_score > 0 else 0.5
+                else:
+                    weight = 0.5
+
+                deviation_candidates.append((len(trace), weight))
+
+                if node is None or node.is_terminal():
+                    break
+                trace.append(p2_response)
+                node = node.children.get(p2_response)
+            else:
+                break
+
+        indices, weights = zip(*deviation_candidates)
+        inverse_weights = [1.0 / (w + 1e-9) for w in weights]
+        chosen_index = random.choices(indices, weights=inverse_weights, k=1)[0]
+
+        return trace[:chosen_index + 1]
                                           
     def CollectTraces(self, SubTrace: list[str]) -> list[list[str]]:  
         '''
@@ -144,7 +178,7 @@ class MCTSEquivalenceOracle(Oracle):
             if Sampler_Break==15:
                 #assert here 
                 print("Something is going wrong there are no other actions currently")
-                return None
+                return None, None
                                                                                                                                                                                                                             
         frontier = [SubTrace_Dev + [sampled_action]]
         completed = []                                                                                                                                                                                                       
@@ -178,7 +212,7 @@ class MCTSEquivalenceOracle(Oracle):
             if not frontier:
                 break
 
-        return completed + frontier
+        return completed + frontier, sampled_action
 
     
 
@@ -202,33 +236,42 @@ class MCTSEquivalenceOracle(Oracle):
               raise AssertionError(f"Expected P1 node but got P2 at trace: {current_trace}")
                                                                                                                                                                                                                                                                           
           for p1_input in current_node.children.keys():
-              self.hypothesis.reset_to_initial()                                                                                                                                                                                                                          
+              self.hypothesis.reset_to_initial()
               p1_inputs = (current_trace + [p1_input])[::2]
-              output_action = None                                                                                                                                                                                                                                        
+              output_action = None
               for inp in p1_inputs:
-                  output_action = self.hypothesis.step(inp)                                                                                                                                                                                                               
-                  
+                  output_action = self.hypothesis.step(inp)
+
+              p2_node = current_node.children.get(p1_input)
+              if output_action is None or p2_node is None or output_action not in p2_node.children:
+                  Collect_Traces.append(current_trace + [p1_input])
+                  continue
+
               new_subtrace = current_trace + [p1_input, output_action]
               New_NFA_Node, new_current_state = self.get_current_state(new_subtrace)
               Queue.append([New_NFA_Node, new_subtrace, depth + 1])                                                                                                                                                                                                       
   
       return Collect_Traces      
             
-    def AssignPreferencesAndPreferenceValues(self, Hypothesis_Traces, Counter_Example_Traces):                                                                                                                                                                              
-      smt = SMTValueAssigner()                                                                                                                                                                                                                                            
-      preferred_count = 0
-      total_count = 0                                                                                                                                                                                                                                                     
-      for CE in Counter_Example_Traces:                                                                                                                                                                                                                                   
-          for HE in Hypothesis_Traces:                                                                                                                                                                                                                                    
-              Preference = self.oracle.compare(CE, HE)
-              smt.add(CE, HE, Preference)                                                                                                                                                                                                                                 
-              if Preference == 't1':
-                  preferred_count += 1
-              total_count += 1
-                                                                                                                                                                                                                                                                          
-      values = smt.solve()
-      majority = (preferred_count / total_count) > 0.5 if total_count > 0 else False                                                                                                                                                                                      
-      return values, majority 
+    def AssignPreferencesAndPreferenceValues(self, Hypothesis_Traces, Counter_Example_Traces):
+        smt = SMTValueAssigner()
+        preferred_count = 0
+        total_count = 0
+
+        for CE in Counter_Example_Traces:
+            ce_clean = [a for a in CE if a != 'Terminal']
+            for HE in Hypothesis_Traces:
+                he_clean = [a for a in HE if a != 'Terminal']
+                Preference = self.oracle.compare(ce_clean, he_clean)
+                smt.add(ce_clean, he_clean, Preference)
+                if Preference == 't1':
+                    preferred_count += 1
+                total_count += 1
+        print('begin solve')
+        values = smt.solve()
+        print('end solve')
+        majority = (preferred_count / total_count) > 0.5 if total_count > 0 else False
+        return values, majority
 
     def PropagateValuesThroughTableB(self, SubTrace, Values):                                                                                                                                                                                                               
         # Step 1: update leaf values                                                                                                                                                                                                                                        

@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 import math
 
 
-HIGH_PRIOR = float('inf')    # UCB score for completely unexplored actions
+HIGH_PRIOR = 0.75   # UCB score for completely unexplored actions
 
 
 @dataclass

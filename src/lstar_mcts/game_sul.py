@@ -18,15 +18,21 @@ old hypothesis and the new SUL that AALpy uses as a counterexample.
 
 from aalpy.base import SUL
 from src.game.minimax.game_nfa import GameNFA
+<<<<<<< HEAD
 from src.game.minimax.preference_oracle import PreferenceOracle
+=======
+from src.lstar_mcts.preference_oracle import PreferenceOracle
+from src.lstar_mcts.table_b import TableB
+>>>>>>> e90aedc (updated lstar MCTS stuff)
 
 
 class GameSUL(SUL):
 
-    def __init__(self, nfa: GameNFA, oracle: PreferenceOracle) -> None:
+    def __init__(self, nfa: GameNFA, oracle: PreferenceOracle, table_b:TableB) -> None:
         super().__init__()
         self.nfa    = nfa
         self.oracle = oracle
+        self.table_b=table_b
 
         # Full interleaved trace for current query: [P1, P2, P1, P2, ...]
         self._trace: list[str] = []
@@ -50,6 +56,9 @@ class GameSUL(SUL):
         """Reset trace at the start of each membership query."""
         self._trace = []
         self._current_p1 = []
+        self.num_queries += 1
+        if self.num_queries % 500 == 0:
+            print(f'  [SUL] membership queries: {self.num_queries}')
 
     def post(self) -> None:
         pass
@@ -76,6 +85,7 @@ class GameSUL(SUL):
         p2_moves = self.nfa.p2_legal_moves(self._trace)
         if not p2_moves:
             return None
+        
 
         interleaved_key = tuple(self._trace)
         if interleaved_key in self._overrides:
@@ -83,6 +93,11 @@ class GameSUL(SUL):
         else:
             p2_response = self.oracle.preferred_move(self._trace)
 
+        for move in p2_moves:
+            if move == p2_response:
+                self.table_b.record_visit(self._trace, move)
+            else:
+                self.table_b._get(self._trace,move)
         self._trace.append(p2_response)
         self._cache[cache_key] = p2_response
         return p2_response
