@@ -68,7 +68,45 @@ class TestReset:
 # ---------------------------------------------------------------------------
 
 class TestStepNormalAlternation:
-    pass
+    def test_first_step_returns_legal_edge(self, sul):
+        # P1 plays edge 0 (no box completion possible on first move)
+        sul.pre()
+        p2 = sul.step(0)
+        assert p2 != PASS
+        assert p2 in set(range(12)) - {0}
+
+    def test_real_trace_has_both_edges_after_one_step(self, sul):
+        sul.pre()
+        p2 = sul.step(0)
+        assert sul._real_trace[0] == 0
+        assert sul._real_trace[1] == p2
+        assert len(sul._real_trace) == 2
+
+    def test_state_is_back_to_p1_turn_after_step(self, sul):
+        # P2 responds without completing a box → turn returns to P1
+        sul.pre()
+        sul.step(0)
+        assert sul._state.player == 'P1'
+
+    def test_p2_does_not_replay_p1_edge(self, sul):
+        sul.pre()
+        p2 = sul.step(0)
+        assert p2 != 0
+
+    def test_trace_grows_by_two_per_step(self, sul):
+        sul.pre()
+        sul.step(0)
+        assert len(sul._real_trace) == 2
+        # pick a still-available edge rather than hardcoding, since P2
+        # may have already claimed edge 1 in its response to step 0
+        p1_second = next(e for e in range(12) if e in sul._state.children)
+        sul.step(p1_second)
+        assert len(sul._real_trace) == 4
+
+    def test_state_is_not_root_after_step(self, sul):
+        sul.pre()
+        sul.step(0)
+        assert sul._state is not sul.nfa.root
 
 
 # ---------------------------------------------------------------------------
