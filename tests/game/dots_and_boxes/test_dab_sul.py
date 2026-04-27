@@ -37,7 +37,30 @@ def run_steps(sul: DotsAndBoxesSUL, p1_inputs: list) -> list:
 # ---------------------------------------------------------------------------
 
 class TestReset:
-    pass
+    def test_state_resets_to_root(self, sul):
+        sul.pre()
+        sul.step(0)
+        sul.pre()
+        assert sul._state is sul.nfa.root
+
+    def test_real_trace_clears(self, sul):
+        sul.pre()
+        sul.step(0)
+        sul.pre()
+        assert sul._real_trace == []
+
+    def test_pre_is_idempotent(self, sul):
+        sul.pre()
+        sul.pre()
+        assert sul._state is sul.nfa.root
+        assert sul._real_trace == []
+
+    def test_step_after_pre_matches_fresh_sul(self, sul):
+        # Run a query, reset, then confirm first step gives the same output.
+        sul.pre()
+        first_output = sul.step(0)
+        sul.pre()
+        assert sul.step(0) == first_output
 
 
 # ---------------------------------------------------------------------------
