@@ -18,12 +18,8 @@ old hypothesis and the new SUL that AALpy uses as a counterexample.
 
 from aalpy.base import SUL
 from src.game.minimax.game_nfa import GameNFA
-<<<<<<< HEAD
-from src.game.minimax.preference_oracle import PreferenceOracle
-=======
 from src.lstar_mcts.preference_oracle import PreferenceOracle
 from src.lstar_mcts.table_b import TableB
->>>>>>> e90aedc (updated lstar MCTS stuff)
 
 
 class GameSUL(SUL):
@@ -56,9 +52,6 @@ class GameSUL(SUL):
         """Reset trace at the start of each membership query."""
         self._trace = []
         self._current_p1 = []
-        self.num_queries += 1
-        if self.num_queries % 500 == 0:
-            print(f'  [SUL] membership queries: {self.num_queries}')
 
     def post(self) -> None:
         pass
