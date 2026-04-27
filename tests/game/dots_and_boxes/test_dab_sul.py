@@ -160,7 +160,46 @@ class TestStepP2ExtraTurn:
 # ---------------------------------------------------------------------------
 
 class TestStepP1ExtraTurn:
-    pass
+    """
+    box(0,0) borders: 0, 2, 6, 7.
+    P2 is forced via overrides to play neutral edges (4, 5, 8) so that
+    edges 0, 2, 6 accumulate as P1 moves. P1 then plays 7, completing
+    box(0,0). step() must return PASS immediately — P1 keeps their turn
+    and P2 gets no response for that step.
+    """
+
+    def _drive_to_p1_extra_turn(self, sul) -> int | str:
+        """Drive the SUL to a state where P1 just completed box(0,0).
+        Returns the output of the completing step (should be PASS)."""
+        sul.pre()
+        sul._overrides[(0,)]            = 4
+        sul._overrides[(0, 4, 2)]       = 5
+        sul._overrides[(0, 4, 2, 5, 6)] = 8
+        sul.step(0)   # P1:0 → P2:4.  _real_trace=[0,4]
+        sul.step(2)   # P1:2 → P2:5.  _real_trace=[0,4,2,5]
+        sul.step(6)   # P1:6 → P2:8.  _real_trace=[0,4,2,5,6,8]
+        return sul.step(7)  # P1:7 completes box(0,0)
+
+    def test_completing_step_returns_pass(self, sul):
+        assert self._drive_to_p1_extra_turn(sul) == PASS
+
+    def test_state_player_is_p1_after_completion(self, sul):
+        self._drive_to_p1_extra_turn(sul)
+        assert sul._state.player == 'P1'
+
+    def test_p1_score_incremented(self, sul):
+        self._drive_to_p1_extra_turn(sul)
+        assert sul._state.p1_boxes == 1
+
+    def test_p1_completing_edge_in_real_trace(self, sul):
+        self._drive_to_p1_extra_turn(sul)
+        assert 7 in sul._real_trace
+
+    def test_no_p2_response_appended_after_completion(self, sul):
+        # P2 played 3 responses (edges 4, 5, 8) and P1 played 4 edges (0,2,6,7)
+        # step() returns PASS before asking P2, so trace length is 7 not 8
+        self._drive_to_p1_extra_turn(sul)
+        assert len(sul._real_trace) == 7
 
 
 # ---------------------------------------------------------------------------
