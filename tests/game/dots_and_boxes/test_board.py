@@ -33,6 +33,7 @@ from src.game.dots_and_boxes.board import (
     _h_edge,
     _v_edge,
     _box_borders,
+    _adjacent_boxes
     )
 
 
@@ -64,6 +65,11 @@ class TestEdgeIndexing:
         assert _box_borders(1, 0, 2, 2) == (2, 4, 9, 10)
         assert _box_borders(1, 1, 2, 2) == (3, 5, 10, 11)
 
+    def test_adjacent_boxes(self):
+        # 2 x 2 Grid:
+        assert _adjacent_boxes(0, 2, 2) == [(0, 0)]
+        assert _adjacent_boxes(7, 2, 2) == [(0, 0), (0, 1)]
+        assert _adjacent_boxes(10, 2, 2) == [(1, 0), (1, 1)]
 
 
 # Original LLM Generated Tests
