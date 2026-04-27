@@ -18,7 +18,7 @@ old hypothesis and the new SUL that AALpy uses as a counterexample.
 
 from aalpy.base import SUL
 from src.game.minimax.game_nfa import GameNFA
-from src.lstar_mcts.preference_oracle import PreferenceOracle
+from src.game.minimax.preference_oracle import PreferenceOracle
 from src.lstar_mcts.table_b import TableB
 
 
