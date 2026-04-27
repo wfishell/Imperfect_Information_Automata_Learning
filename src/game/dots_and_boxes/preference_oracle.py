@@ -60,7 +60,7 @@ class DotsAndBoxesOracle:
     @staticmethod
     def _heuristic(state: DotsAndBoxesState) -> float:
         """
-        Box score differential from P2's perspective, normalised to (-1, 1).
+        Box score differential from P2's perspective, normalized to (-1, 1).
 
         (p2_boxes - p1_boxes) / total_boxes
 
