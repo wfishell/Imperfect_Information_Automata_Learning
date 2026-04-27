@@ -31,7 +31,8 @@ import pytest
 from src.game.dots_and_boxes.board import (
     DotsAndBoxesState,
     _h_edge,
-    _v_edge
+    _v_edge,
+    _box_borders,
     )
 
 
@@ -55,6 +56,14 @@ class TestEdgeIndexing:
         assert _v_edge(1, 0, 2, 2) == 9
         assert _v_edge(1, 1, 2, 2) == 10
         assert _v_edge(1, 2, 2, 2) == 11
+
+    def test_box_querying(self):
+        # 2 x 2 Grid:
+        assert _box_borders(0, 0, 2, 2) == (0, 2, 6, 7)
+        assert _box_borders(0, 1, 2, 2) == (1, 3, 7, 8)
+        assert _box_borders(1, 0, 2, 2) == (2, 4, 9, 10)
+        assert _box_borders(1, 1, 2, 2) == (3, 5, 10, 11)
+
 
 
 # Original LLM Generated Tests
