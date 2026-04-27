@@ -1,8 +1,8 @@
 """
-Unit tests for PreferenceOracle (src/lstar_mcts/preference_oracle.py).
+Unit tests for PreferenceOracle (src/game/minimax/preference_oracle.py).
 
 Run Instructions:
-    pytest tests/lstar_mcts/preference_oracle.py -v
+    pytest tests/game/minimax/preference_oracle.py -v
 """
 
 import pytest
