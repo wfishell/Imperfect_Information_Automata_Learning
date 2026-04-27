@@ -281,4 +281,19 @@ class TestStrategyOverrides:
 # ---------------------------------------------------------------------------
 
 class TestP1InputsFromTrace:
-    pass
+    def test_empty_trace_returns_empty(self, sul):
+        assert sul.p1_inputs_from_trace([]) == []
+
+    def test_single_step_extracts_p1_input(self, sul):
+        assert sul.p1_inputs_from_trace([0, 3]) == [0]
+
+    def test_multiple_steps_extracts_all_p1_inputs(self, sul):
+        assert sul.p1_inputs_from_trace([0, 3, 1, 5]) == [0, 1]
+
+    def test_pass_at_even_index_is_included(self, sul):
+        # PASS as a P1 input sits at an even index and must be extracted
+        assert sul.p1_inputs_from_trace([PASS, 3]) == [PASS]
+
+    def test_odd_length_trace_handles_unanswered_p1_input(self, sul):
+        # Trace ends mid-step before P2 has responded
+        assert sul.p1_inputs_from_trace([0, 3, 1]) == [0, 1]
