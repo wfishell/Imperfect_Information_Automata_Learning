@@ -33,7 +33,8 @@ from src.game.dots_and_boxes.board import (
     _h_edge,
     _v_edge,
     _box_borders,
-    _adjacent_boxes
+    _adjacent_boxes,
+    _boxes_completed_by
     )
 
 
@@ -70,6 +71,22 @@ class TestEdgeIndexing:
         assert _adjacent_boxes(0, 2, 2) == [(0, 0)]
         assert _adjacent_boxes(7, 2, 2) == [(0, 0), (0, 1)]
         assert _adjacent_boxes(10, 2, 2) == [(1, 0), (1, 1)]
+
+class TestBoxesCompletedBy:
+    def test_no_boxes_completed(self):
+        edges = (True, False, True, False, False, False,
+                 False, False, False, False, False, False)
+        assert _boxes_completed_by(edges, 7, 2, 2) == 0
+
+    def test_one_box_completed(self):
+        edges = (True, False, True, False, False, False,
+                 True, False, False, False, False, False)
+        assert _boxes_completed_by(edges, 7, 2, 2) == 1
+
+    def test_two_boxes_completed(self):
+        edges = (True, True, True, True, False, False,
+                 True, True, True, False, False, False)
+        assert _boxes_completed_by(edges, 7, 2, 2) == 2
 
 
 # Original LLM Generated Tests
