@@ -72,14 +72,18 @@ class TestCurrentPlayer:
     """Tests for GameNFA.current_player"""
 
     def test_valid_trace(self, nfa):
-        # DEBUG
-        print(f"Tree: {generate_tree(depth=2, seed=42)}")
-
-        # P1 Case
+        # P2 Case
         trace = ['A']
         assert nfa.current_player(trace) == 'P2'
+
+        # P1 Case
+        deeper_root = generate_tree(depth=3, seed=42)
+        deeper_nfa = GameNFA(deeper_root)
+
+        trace = ['A', 'X']
+        assert deeper_nfa.current_player(trace) == 'P1'
     
-        # P2 Case
+        # Terminal Case
         trace = ['A', 'X']
         assert nfa.current_player(trace) == None
         # Terminal State → No current player (It would be P2 if the game continued)
