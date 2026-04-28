@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 from functools import cached_property
 
@@ -25,6 +26,7 @@ class TicTacToeState:
         if self.is_terminal():
             return {}
         token      = X if self.player == 'P1' else O
+
         next_player = 'P2' if self.player == 'P1' else 'P1'
         return {
             sq: TicTacToeState(
