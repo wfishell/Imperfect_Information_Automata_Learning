@@ -21,6 +21,7 @@ class TicTacToeOracle:
             return None
         return max(state.children, key=lambda sq: self._minimax(state.children[sq], self.depth))
 
+    # Question: TODO: Should compare be from P2's perspective or just the better move?
     def compare(self, trace1: list, trace2: list) -> str:
         """
         Compare two traces from P2's perspective.
@@ -73,7 +74,7 @@ class TicTacToeOracle:
         pieces (and empties), that same weight is subtracted.  Mixed lines
         (both X and O) are dead and contribute nothing.
 
-        The raw score is normalised by the maximum possible value (8 * 1.0 = 8)
+        The raw score is normalized by the maximum possible value (8 * 1.0 = 8)
         so the result stays in (-1, 1), consistent with terminal values ±1.
         """
         o_score = 0.0
