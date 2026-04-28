@@ -165,7 +165,7 @@ class TestP1Wins:
         [1, 0, 4, 3, 7],        # X at 1,4,7 — center column top→bottom
         [0, 1, 3, 5, 6],        # X at 0,3,6 — left column top→bottom
         [2, 1, 5, 3, 8],        # X at 2,5,8 — right column top→bottom
-        [0, 3, 4, 6, 8],        # X at 0,4,8 — diagonal path
+        [2, 0, 4, 1, 6],        # X at 2,4,6 — diagonal via 2→4→6
     ])
     def test_p1_wins(self, moves):
         state = make_state(moves)
@@ -210,7 +210,7 @@ class TestNoDraws:
         full_game_traces = [
             [1, 0, 4, 3, 7],           # P1 wins early
             [7, 3, 2, 4, 0, 5],        # P2 wins early
-            [0, 3, 4, 6, 8],           # P1 wins
+            [2, 0, 4, 1, 6],           # P1 wins via 2→4→6
         ]
         for trace in full_game_traces:
             state = make_state(trace)

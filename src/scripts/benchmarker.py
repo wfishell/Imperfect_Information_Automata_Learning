@@ -47,6 +47,9 @@ from src.game.dots_and_boxes.game_nfa import DotsAndBoxesNFA, PASS
 from src.game.dots_and_boxes.preference_oracle import DotsAndBoxesOracle
 from src.game.dots_and_boxes.dab_sul import DotsAndBoxesSUL
 
+from src.game.hex.game_nfa import HexNFA
+from src.game.hex.preference_oracle import HexOracle
+
 from src.lstar_mcts.learner import run_lstar_mcts
 from src.lstar_mcts.table_b import TableB
 from src.lstar_mcts.mcts_oracle import MCTSEquivalenceOracle
@@ -100,6 +103,12 @@ def _build_dab(rows: int, cols: int, oracle_depth, seed: int):
     oracle = DotsAndBoxesOracle(nfa, depth=oracle_depth)
     sul    = DotsAndBoxesSUL(nfa, oracle)
     return nfa, oracle, list(nfa.root.children.keys()) + [PASS], sul, None
+
+
+def _build_hex(size: int, oracle_depth, seed: int):
+    nfa    = HexNFA(size=size)
+    oracle = HexOracle(nfa, depth=oracle_depth)
+    return nfa, oracle, list(nfa.root.children.keys()), None, None
 
 
 # -----------------------------------------------------------------------
@@ -259,6 +268,12 @@ def _make_registry(include_dab_3x3: bool = True) -> dict:
             'eval':  lambda model, nfa, aux, seed: _eval_vs_random(
                 model, nfa, seed, is_dab=True),
         }
+    reg['hex_3x3'] = {
+        'label':         'Hex 3x3',
+        'oracle_depths': [0, 1, 2, None],
+        'build': lambda seed, od: _build_hex(size=3, oracle_depth=od, seed=seed),
+        'eval':  lambda model, nfa, aux, seed: _eval_vs_random(model, nfa, seed),
+    }
     return reg
 
 
@@ -528,7 +543,7 @@ def main():
     )
     parser.add_argument('--games', nargs='+', default=None,
                         help='Subset of games. '
-                             'Choices: minimax_d4 nim_123 ttt dab_2x2 dab_3x3')
+                             'Choices: minimax_d4 nim_123 ttt dab_2x2 dab_3x3 hex_3x3')
     parser.add_argument('--K',            type=int,   nargs='+', default=K_VALUES)
     parser.add_argument('--depth-n',      dest='depth_n', type=int, nargs='+',
                         default=DEPTH_NS)
