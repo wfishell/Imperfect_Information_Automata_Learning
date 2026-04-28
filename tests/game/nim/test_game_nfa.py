@@ -57,7 +57,7 @@ def test_get_node_exhausted_pile_returns_none(nfa):
 
 def test_get_node_past_terminal_returns_none(nfa):
     # take everything then try another move
-    full_clear = [(0,1), (1,2), (2,3)]
+    # full_clear = [(0,1), (1,2), (2,3)]
     # after P1 takes pile0, P2 takes pile1, P1 takes pile2 → terminal
     trace = [(0,1), (1,2), (2,3), (0,1)]
     assert nfa.get_node(trace) is None
