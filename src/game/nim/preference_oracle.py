@@ -57,14 +57,26 @@ class NimOracle:
         self._cache[key] = result
         return result
 
+    # This heuristic is globally optimal. We need a locally optimal one.
+    # @staticmethod
+    # def _heuristic(state: NimState) -> float:
+    #     nim_xor = 0
+    #     for p in state.piles:
+    #         nim_xor ^= p
+    #     # nim_xor != 0 → player to move is in a winning position
+    #     # Return from P2's perspective; ±0.5 stays strictly inside terminal ±1
+    #     if state.player == 'P2':
+    #         return 0.5 if nim_xor != 0 else -0.5
+    #     else:
+    #         return -0.5 if nim_xor != 0 else 0.5
+
     @staticmethod
     def _heuristic(state: NimState) -> float:
-        nim_xor = 0
-        for p in state.piles:
-            nim_xor ^= p
-        # nim_xor != 0 → player to move is in a winning position
-        # Return from P2's perspective; ±0.5 stays strictly inside terminal ±1
-        if state.player == 'P2':
-            return 0.5 if nim_xor != 0 else -0.5
-        else:
-            return -0.5 if nim_xor != 0 else 0.5
+        # Greedy largest-pile: prefer states where the largest pile dominates.
+        # Locally intuitive but ignores nim-sum, so globally suboptimal.
+        # Scaled by 0.9 to stay strictly inside terminal ±1.
+        total = sum(state.piles)
+        if total == 0:
+            return 0.0
+        score = (max(state.piles) / total) * 0.9
+        return score if state.player == 'P2' else -score

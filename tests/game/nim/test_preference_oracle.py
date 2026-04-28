@@ -97,26 +97,26 @@ class TestCompare:
 # ---------------------------------------------------------------------------
 
 class TestHeuristic:
-    def test_positive_when_p2_to_move_and_xor_nonzero(self):
-        # piles=(1,2,1), xor=2≠0, P2 to move → winning → positive
-        assert NimOracle._heuristic(NimState(piles=(1, 2, 1), player='P2')) > 0
+    def test_positive_when_p2_to_move(self):
+        # P2 to move with non-empty piles → always positive
+        assert NimOracle._heuristic(NimState(piles=(1, 2, 3), player='P2')) > 0
 
-    def test_negative_when_p2_to_move_and_xor_zero(self):
-        # piles=(1,2,3), xor=0, P2 to move → losing → negative
-        assert NimOracle._heuristic(NimState(piles=(1, 2, 3), player='P2')) < 0
+    def test_negative_when_p1_to_move(self):
+        # P1 to move → always negative (score is from P2's perspective)
+        assert NimOracle._heuristic(NimState(piles=(1, 2, 3), player='P1')) < 0
 
-    def test_negative_when_p1_to_move_and_xor_nonzero(self):
-        # piles=(1,2,1), xor=2≠0, P1 to move → P1 winning → bad for P2 → negative
-        assert NimOracle._heuristic(NimState(piles=(1, 2, 1), player='P1')) < 0
-
-    def test_positive_when_p1_to_move_and_xor_zero(self):
-        # piles=(1,2,3), xor=0, P1 to move → P1 losing → good for P2 → positive
-        assert NimOracle._heuristic(NimState(piles=(1, 2, 3), player='P1')) > 0
+    def test_dominant_pile_scores_higher_than_balanced(self):
+        # (3,0,0): max/total=1.0 → higher score than (1,1,1): max/total=1/3
+        s_dominant = NimState(piles=(3, 0, 0), player='P2')
+        s_balanced  = NimState(piles=(1, 1, 1), player='P2')
+        assert NimOracle._heuristic(s_dominant) > NimOracle._heuristic(s_balanced)
 
     def test_magnitude(self):
-        assert NimOracle._heuristic(NimState(piles=(1, 2, 1), player='P2')) == 0.5
+        # piles=(1,2,1): max=2, total=4, (2/4)*0.9 = 0.45
+        assert NimOracle._heuristic(NimState(piles=(1, 2, 1), player='P2')) == pytest.approx(0.45)
 
     def test_stays_inside_terminal_range(self):
+        # 0.9 scaling ensures max/total=1.0 edge case never reaches ±1.0
         for piles in [(1, 2, 3), (1, 2, 1), (0, 0, 1)]:
             for player in ('P1', 'P2'):
                 s = NimState(piles=piles, player=player)
