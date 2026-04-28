@@ -19,7 +19,6 @@ Consistent: if row(s1)==row(s2) then for all a, row(s1+a)==row(s2+a)
 """
 
 from __future__ import annotations
-from src.lstar_mcts.game_sul import GameSUL
 
 
 class MealyState:
@@ -66,7 +65,7 @@ class MealyMachine:
 
 class MealyLStar:
 
-    def __init__(self, alphabet: list[str], sul: GameSUL, eq_oracle, verbose: bool = False):
+    def __init__(self, alphabet: list[str], sul, eq_oracle, verbose: bool = False):
         self.alphabet  = alphabet
         self.sul       = sul
         self.oracle    = eq_oracle

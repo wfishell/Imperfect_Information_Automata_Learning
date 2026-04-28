@@ -1,8 +1,8 @@
 """
-Custom SUL (System Under Learning) for the minimax game.
+Custom SUL (System Under Learning)
 
-Input alphabet  : P1's moves  (e.g. 'A', 'B')
-Output alphabet : P2's moves  (e.g. 'X', 'Y')
+Input alphabet  : P1's moves
+Output alphabet : P2's moves
 
 Each step() receives one P1 input and returns P2's preferred response given
 the full trace history seen so far.  The SUL tracks the interleaved trace
@@ -17,14 +17,12 @@ old hypothesis and the new SUL that AALpy uses as a counterexample.
 """
 
 from aalpy.base import SUL
-from src.game.minimax.game_nfa import GameNFA
-from src.game.minimax.preference_oracle import PreferenceOracle
 from src.lstar_mcts.table_b import TableB
 
 
 class GameSUL(SUL):
 
-    def __init__(self, nfa: GameNFA, oracle: PreferenceOracle, table_b:TableB) -> None:
+    def __init__(self, nfa, oracle, table_b: TableB) -> None:
         super().__init__()
         self.nfa    = nfa
         self.oracle = oracle

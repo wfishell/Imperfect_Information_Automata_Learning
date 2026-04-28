@@ -28,8 +28,6 @@ import time
 from aalpy.base import Oracle
 
 from src.lstar_mcts.smt_solver import SMTValueAssigner
-from src.game.minimax.game_nfa import GameNFA
-from src.game.minimax.preference_oracle import PreferenceOracle
 from src.lstar_mcts.game_sul import GameSUL
 from src.lstar_mcts.table_b import TableB
 
@@ -39,8 +37,8 @@ class MCTSEquivalenceOracle(Oracle):
     def __init__(
         self,
         sul: GameSUL,
-        nfa: GameNFA,
-        oracle: PreferenceOracle,
+        nfa,
+        oracle,
         table_b: TableB,
         depth_N: int,
         max_trace_length: int = 20,
