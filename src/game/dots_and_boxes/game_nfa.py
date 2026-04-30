@@ -26,6 +26,8 @@ class DotsAndBoxesNFA:
                 return None
             state = state.children[action]
         return state
+    
+    # TODO: Known Issue - Pass only acts as a no-op. I want it to behave more like a valid state/transition such that we can reuse our standard SUL and MCTS Oracle.
 
     # ------------------------------------------------------------------
     # Player-specific move queries — mirrors TicTacToeNFA interface

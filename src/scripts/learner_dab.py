@@ -1,3 +1,8 @@
+# Current Issues
+#
+# MCTS Oracle is not set up to make use of PASS. I want to modify the NFA to treat PASS as a more valid state/transition to
+# keep our current turn-based game going.
+#  
 """
 Learn P2's strategy automaton for Dots and Boxes via L* + MCTS.
 
