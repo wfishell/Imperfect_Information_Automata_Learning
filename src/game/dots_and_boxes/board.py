@@ -1,6 +1,8 @@
 from __future__ import annotations
 from functools import cached_property
 
+PASS = 'PASS'
+
 
 def _h_edge(r: int, c: int, cols: int) -> int:
     """Index of the horizontal edge at grid row r, column c."""
@@ -66,6 +68,11 @@ class DotsAndBoxesState:
         v_edge(r, c) = (rows+1)*cols + r*(cols+1) + c
 
     For the default 2×2 box grid this gives 12 edges (indices 0–11).
+
+    forced_pass=True means this player's only legal move is PASS, which
+    transitions back to the other player's real turn (they earned an extra
+    turn by completing a box).  This keeps player strictly alternating in
+    the NFA graph while faithfully encoding the "go again" rule.
     """
 
     def __init__(
@@ -76,13 +83,15 @@ class DotsAndBoxesState:
         player: str = 'P1',
         p1_boxes: int = 0,
         p2_boxes: int = 0,
+        forced_pass: bool = False,
     ) -> None:
-        self.rows     = rows
-        self.cols     = cols
-        self.edges    = edges if edges is not None else (False,) * self._n_edges(rows, cols)
-        self.player   = player
-        self.p1_boxes = p1_boxes
-        self.p2_boxes = p2_boxes
+        self.rows        = rows
+        self.cols        = cols
+        self.edges       = edges if edges is not None else (False,) * self._n_edges(rows, cols)
+        self.player      = player
+        self.p1_boxes    = p1_boxes
+        self.p2_boxes    = p2_boxes
+        self.forced_pass = forced_pass
 
     @staticmethod
     def _n_edges(rows: int, cols: int) -> int:
@@ -93,30 +102,41 @@ class DotsAndBoxesState:
         return self.rows * self.cols
 
     # ------------------------------------------------------------------
-    # Children — one entry per undrawn edge
+    # Children — strict player alternation with forced-pass states
     # ------------------------------------------------------------------
 
     @cached_property
-    def children(self) -> dict[int, DotsAndBoxesState]:
+    def children(self) -> dict:
         if self.is_terminal():
             return {}
+
+        # Forced-pass state: the current player must pass, handing back to
+        # the other player who earned the extra turn.
+        if self.forced_pass:
+            other = 'P2' if self.player == 'P1' else 'P1'
+            return {PASS: DotsAndBoxesState(
+                rows=self.rows, cols=self.cols,
+                edges=self.edges, player=other,
+                p1_boxes=self.p1_boxes, p2_boxes=self.p2_boxes,
+                forced_pass=False,
+            )}
+
         result = {}
+        other = 'P2' if self.player == 'P1' else 'P1'
         for i, drawn in enumerate(self.edges):
             if drawn:
                 continue
-            completed  = _boxes_completed_by(self.edges, i, self.rows, self.cols)
-            new_edges  = self.edges[:i] + (True,) + self.edges[i + 1:]
-            new_p1     = self.p1_boxes + (completed if self.player == 'P1' else 0)
-            new_p2     = self.p2_boxes + (completed if self.player == 'P2' else 0)
-            # same player keeps turn if they completed a box, otherwise swap
-            if completed > 0:
-                next_player = self.player
-            else:
-                next_player = 'P2' if self.player == 'P1' else 'P1'
+            completed = _boxes_completed_by(self.edges, i, self.rows, self.cols)
+            new_edges = self.edges[:i] + (True,) + self.edges[i + 1:]
+            new_p1    = self.p1_boxes + (completed if self.player == 'P1' else 0)
+            new_p2    = self.p2_boxes + (completed if self.player == 'P2' else 0)
+            # Always switch to other player; if a box was completed, that
+            # other player is forced to pass so the completing player goes again.
             result[i] = DotsAndBoxesState(
                 rows=self.rows, cols=self.cols,
-                edges=new_edges, player=next_player,
+                edges=new_edges, player=other,
                 p1_boxes=new_p1, p2_boxes=new_p2,
+                forced_pass=(completed > 0),
             )
         return result
 
@@ -154,22 +174,18 @@ class DotsAndBoxesState:
     def __repr__(self) -> str:
         lines = []
         for r in range(self.rows + 1):
-            # horizontal edges
-            row = ''
-            for c in range(self.cols):
-                top = '.' + ('---' if self.edges[_h_edge(r, c, self.cols)] else '   ')
             row = '.'.join(
                 '---' if self.edges[_h_edge(r, c, self.cols)] else '   '
                 for c in range(self.cols)
             )
             lines.append('.' + row + '.')
             if r < self.rows:
-                # vertical edges + box markers
                 vert = ''
                 for c in range(self.cols + 1):
                     vert += '|' if self.edges[_v_edge(r, c, self.rows, self.cols)] else ' '
                     if c < self.cols:
                         vert += '   '
                 lines.append(vert)
-        lines.append(f'({self.player} to move  P1:{self.p1_boxes}  P2:{self.p2_boxes})')
+        fp = '  FORCED PASS' if self.forced_pass else ''
+        lines.append(f'({self.player} to move{fp}  P1:{self.p1_boxes}  P2:{self.p2_boxes})')
         return '\n'.join(lines)

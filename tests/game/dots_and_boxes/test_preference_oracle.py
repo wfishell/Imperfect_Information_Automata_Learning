@@ -10,7 +10,7 @@ Run: python -m pytest tests/game/dots_and_boxes/test_preference_oracle.py -v
 """
 
 import pytest
-from src.game.dots_and_boxes.game_nfa import DotsAndBoxesNFA
+from src.game.dots_and_boxes.game_nfa import DotsAndBoxesNFA, PASS
 from src.game.dots_and_boxes.preference_oracle import DotsAndBoxesOracle
 from src.game.dots_and_boxes.board import DotsAndBoxesState
 
@@ -26,11 +26,17 @@ def oracle_depth1():
 
 
 def make_terminal_trace() -> list:
+    """Return a trace that plays all 12 edges and reaches a terminal state.
+    Handles forced-pass states by inserting PASS into the trace."""
     nfa = DotsAndBoxesNFA()
     state = nfa.root
     remaining = list(range(12))
     trace = []
-    while remaining:
+    while not state.is_terminal():
+        if state.forced_pass:
+            trace.append(PASS)
+            state = state.children[PASS]
+            continue
         e = next(e for e in remaining if e in state.children)
         state = state.children[e]
         trace.append(e)

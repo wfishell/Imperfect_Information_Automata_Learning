@@ -47,7 +47,7 @@ class MCTSEquivalenceOracle(Oracle):
         temperature: float = 1.0,
         verbose: bool      = False,
     ) -> None:
-        alphabet = list(nfa.root.children.keys())   # P1's top-level inputs
+        alphabet = list(getattr(nfa, 'p1_alphabet', nfa.root.children.keys()))
         super().__init__(alphabet, sul)
         self.sul              = sul
         self.nfa              = nfa

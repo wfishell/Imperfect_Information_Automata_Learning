@@ -1,7 +1,5 @@
 from __future__ import annotations
-from src.game.dots_and_boxes.board import DotsAndBoxesState
-
-PASS = 'PASS'
+from src.game.dots_and_boxes.board import DotsAndBoxesState, PASS
 
 
 class DotsAndBoxesNFA:
@@ -15,33 +13,40 @@ class DotsAndBoxesNFA:
 
     def get_node(self, trace: list) -> DotsAndBoxesState | None:
         """Replay trace from root, returning the resulting state or None if illegal.
-        PASS actions are no-ops — they advance the model turn without changing game state."""
+
+        PASS is a real child key on forced-pass states, so it is navigated
+        like any other action rather than treated as a no-op.
+        """
         state = self.root
         for action in trace:
             if state is None or state.is_terminal():
                 return None
-            if action == PASS: # Pass only legal when a player has an extra turn.
-                continue
-            if action not in state.children: # Illegal Move
+            if action not in state.children:
                 return None
             state = state.children[action]
         return state
-    
-    # TODO: Known Issue - Pass only acts as a no-op. I want it to behave more like a valid state/transition such that we can reuse our standard SUL and MCTS Oracle.
 
     # ------------------------------------------------------------------
-    # Player-specific move queries — mirrors TicTacToeNFA interface
+    # Player-specific move queries
     # ------------------------------------------------------------------
 
     def p1_legal_inputs(self, trace: list) -> list:
+        """P1's legal inputs at the state reached by trace.
+
+        Returns [PASS] at a forced-pass P1 state, the real edge indices at
+        a normal P1 state, and [] when it is P2's turn or the game is over.
+        """
         state = self.get_node(trace)
-        if state is None or state.is_terminal():
+        if state is None or state.is_terminal() or state.player != 'P1':
             return []
-        if state.player == 'P2':
-            return [PASS]   # P2 earned extra turn — P1's only legal input is PASS
         return list(state.children.keys())
 
     def p2_legal_moves(self, trace: list) -> list:
+        """P2's legal moves at the state reached by trace.
+
+        Returns [PASS] at a forced-pass P2 state, real edge indices at a
+        normal P2 state, and [] when it is P1's turn or the game is over.
+        """
         state = self.get_node(trace)
         if state is None or state.player != 'P2' or state.is_terminal():
             return []
@@ -56,3 +61,11 @@ class DotsAndBoxesNFA:
         if state is None or state.is_terminal():
             return None
         return state.player
+
+    # ------------------------------------------------------------------
+    # Full P1 alphabet — includes PASS for forced-pass states
+    # ------------------------------------------------------------------
+
+    @property
+    def p1_alphabet(self) -> list:
+        return list(self.root.children.keys()) + [PASS]

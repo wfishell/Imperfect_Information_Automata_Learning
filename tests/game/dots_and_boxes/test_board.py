@@ -30,6 +30,7 @@ Run: python -m pytest tests/game/dots_and_boxes/test_board.py -v
 import pytest
 from src.game.dots_and_boxes.board import (
     DotsAndBoxesState,
+    PASS,
     _h_edge,
     _v_edge,
     _box_borders,
@@ -90,11 +91,10 @@ class TestBoxesCompletedBy:
 # DotsAndBoxesState Functionality Tests
 # ---------------------------------------------------------------------------
 
-def make_state(moves: list[int]) -> DotsAndBoxesState:
+def make_state(moves: list) -> DotsAndBoxesState:
     state = DotsAndBoxesState()
     for move in moves:
         state = state.children[move]
-
     return state
 
 
@@ -125,6 +125,9 @@ def test_initial_winner_none():
 def test_total_boxes_2x2():
     assert DotsAndBoxesState().total_boxes == 4
 
+def test_initial_not_forced_pass():
+    assert DotsAndBoxesState().forced_pass is False
+
 
 # ---------------------------------------------------------------------------
 # Children / transitions — no box completion
@@ -154,39 +157,52 @@ def test_children_keys_are_undrawn_edges():
 
 
 # ---------------------------------------------------------------------------
-# Box completion — single box
+# Box completion — forced-pass encoding
 # ---------------------------------------------------------------------------
 
-def test_single_box_completion_keeps_same_player():
+def test_p2_box_completion_creates_p1_forced_pass():
     # box(0,0) borders: 0, 2, 6, 7
     # P1:0, P2:2, P1:6 — three sides drawn, P2 to move
-    # P2 draws 7 → completes box(0,0), P2 keeps turn
+    # P2 draws 7 → completes box(0,0) → P1 is now forced to pass
     s = make_state([0, 2, 6, 7])
-    assert s.player == 'P2'
+    assert s.forced_pass is True
+    assert s.player == 'P1'
 
-def test_single_box_completion_increments_score():
+def test_p2_box_completion_increments_p2_score():
     s = make_state([0, 2, 6, 7])   # P2 completes box(0,0)
     assert s.p2_boxes == 1
     assert s.p1_boxes == 0
 
-def test_p1_completes_box_increments_p1_score():
-    # box(0,0): 0,2,6,7. Arrange so P1 draws the 4th side.
-    # P1:0, P2:1, P1:2, P2:3, P1:6 — 5 edges drawn, P2 to move
-    # Need P1 to draw edge 7. Let P2 draw something neutral first.
-    # P1:0, P2:9, P1:2, P2:3, P1:6 → P2 to move → P2:1 → P1 to move → P1:7
-    s = make_state([0, 9, 2, 3, 6, 1, 7])
-    # After [0,9,2,3,6]: P2 to move (no completions yet)
-    # After [1]: P1 to move
-    # After [7]: box(0,0) complete (edges 0,2,6,7 all drawn), P1 keeps turn
-    assert s.p1_boxes == 1
-    assert s.player == 'P1'
+def test_forced_pass_only_child_is_pass():
+    s = make_state([0, 2, 6, 7])   # P1-forced state
+    assert set(s.children.keys()) == {PASS}
 
-def test_box_completion_reduces_children_count():
-    # After completing a box the same player moves again from same edge pool
-    s_before = make_state([0, 2, 6])   # 3 sides of box(0,0) drawn, P2 to move
-    s_after  = s_before.children[7]    # P2 draws 7 → completes box, P2 moves again
-    # 4 edges drawn total, 8 remain
-    assert len(s_after.children) == 8
+def test_forced_pass_leads_to_real_p2_turn():
+    s_forced = make_state([0, 2, 6, 7])           # P1-forced
+    s_real   = s_forced.children[PASS]             # P2's extra real turn
+    assert s_real.player == 'P2'
+    assert s_real.forced_pass is False
+
+def test_forced_pass_real_turn_has_correct_children():
+    s_forced = make_state([0, 2, 6, 7])
+    s_real   = s_forced.children[PASS]
+    # 4 edges drawn, 8 remain
+    assert len(s_real.children) == 8
+    assert 7 not in s_real.children
+
+def test_p1_completes_box_creates_p2_forced_pass():
+    # box(0,0): 0,2,6,7. Arrange so P1 draws the 4th side.
+    # P1:0, P2:9, P1:2, P2:3, P1:6, P2:1, P1:7
+    s = make_state([0, 9, 2, 3, 6, 1, 7])
+    assert s.p1_boxes == 1
+    assert s.player == 'P2'
+    assert s.forced_pass is True
+
+def test_p1_box_forced_pass_leads_to_real_p1_turn():
+    s_forced = make_state([0, 9, 2, 3, 6, 1, 7])  # P2-forced
+    s_real   = s_forced.children[PASS]              # P1's extra real turn
+    assert s_real.player == 'P1'
+    assert s_real.forced_pass is False
 
 
 # ---------------------------------------------------------------------------
@@ -200,7 +216,8 @@ def test_double_box_completion():
     # Sequence: P1:0, P2:1, P1:2, P2:3, P1:6, P2:8 → P1 to move
     s = make_state([0, 1, 2, 3, 6, 8, 7])
     assert s.p1_boxes == 2
-    assert s.player == 'P1'   # P1 drew the completing edge, keeps turn
+    assert s.player == 'P2'         # P2 is forced to pass
+    assert s.forced_pass is True
 
 def test_double_box_increments_score_by_two():
     s = make_state([0, 1, 2, 3, 6, 8])
@@ -217,24 +234,17 @@ def test_not_terminal_with_edges_remaining():
     assert not make_state([0, 1, 2]).is_terminal()
 
 def test_terminal_when_all_edges_drawn():
-    # Draw all 12 edges in a specific order where no one gets extra turns
-    # to keep the sequence valid.
-    # Any order works as long as we don't try to replay an already-drawn edge.
-    # Use a sequence that avoids completing boxes until forced.
-    # Edges that share no box: 0,4,5,6,8,9,11 (7 edges, no box complete until late)
-    # Actually just replay a known full game.
-    # Draw all edges avoiding early completions where possible.
-    # Simplest: replay all 12 in order, accepting that some player gets extra turns.
     s = DotsAndBoxesState()
     edges_left = list(range(12))
-    while edges_left:
-        e = edges_left[0]
-        if e in s.children:
-            s = s.children[e]
-            edges_left.remove(e)
-        else:
-            # edge already drawn (shouldn't happen in a fresh replay)
-            edges_left.remove(e)
+    while not s.is_terminal():
+        if s.forced_pass:
+            s = s.children[PASS]
+            continue
+        e = next((e for e in edges_left if e in s.children), None)
+        if e is None:
+            break
+        s = s.children[e]
+        edges_left.remove(e)
     assert s.is_terminal()
 
 def test_terminal_all_edges_true():

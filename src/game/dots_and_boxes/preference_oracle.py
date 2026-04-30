@@ -14,8 +14,12 @@ class DotsAndBoxesOracle:
     # Public API — mirrors TicTacToeOracle interface
     # ------------------------------------------------------------------
 
-    def preferred_move(self, prefix: list) -> int | None:
-        """Return the best P2 edge from the state reached by prefix."""
+    def preferred_move(self, prefix: list) -> int | str | None:
+        """Return the best P2 move from the state reached by prefix.
+
+        At a forced-pass P2 state the only legal move is PASS, which is
+        returned directly.  At a real P2 state the best edge is returned.
+        """
         state = self.nfa.get_node(prefix)
         if state is None or state.player != 'P2' or state.is_terminal():
             return None
@@ -39,7 +43,11 @@ class DotsAndBoxesOracle:
         return self._minimax(state, self.depth)
 
     def _minimax(self, state: DotsAndBoxesState, depth: int | None) -> float:
-        key = (state.edges, state.player, state.p1_boxes, state.p2_boxes, depth)
+        # forced_pass is included in the key: a forced-pass state has a
+        # different value than a normal state with the same edges/player/boxes
+        # (forced-pass has only one PASS child, normal has real choices).
+        key = (state.edges, state.player, state.p1_boxes, state.p2_boxes,
+               state.forced_pass, depth)
         if key in self._cache:
             return self._cache[key]
 

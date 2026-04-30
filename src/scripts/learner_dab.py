@@ -1,14 +1,5 @@
-# Current Issues
-#
-# MCTS Oracle is not set up to make use of PASS. I want to modify the NFA to treat PASS as a more valid state/transition to
-# keep our current turn-based game going.
-#  
 """
 Learn P2's strategy automaton for Dots and Boxes via L* + MCTS.
-
-DotsAndBoxes uses DotsAndBoxesSUL rather than the generic GameSUL because
-of the PASS mechanic (extra turns after box completions), so components are
-built manually here instead of delegating to run_lstar_mcts().
 
 Usage:
     python -m src.scripts.learner_dab
@@ -24,7 +15,7 @@ from pathlib import Path
 from src.game.dots_and_boxes.game_nfa import DotsAndBoxesNFA, PASS
 from src.game.dots_and_boxes.board import _h_edge, _v_edge
 from src.game.dots_and_boxes.preference_oracle import DotsAndBoxesOracle
-from src.game.dots_and_boxes.dab_sul import DotsAndBoxesSUL
+from src.lstar_mcts.game_sul import GameSUL
 from src.lstar_mcts.table_b import TableB
 from src.lstar_mcts.mcts_oracle import MCTSEquivalenceOracle
 from src.lstar_mcts.custom_lstar import MealyLStar
@@ -55,8 +46,8 @@ def main():
 
     nfa     = DotsAndBoxesNFA(rows=args.rows, cols=args.cols)
     oracle  = DotsAndBoxesOracle(nfa, depth=args.oracle_depth)
-    sul     = DotsAndBoxesSUL(nfa, oracle)
     table_b = TableB()
+    sul     = GameSUL(nfa=nfa, oracle=oracle, table_b=table_b)
 
     eq = MCTSEquivalenceOracle(
         sul=sul, nfa=nfa, oracle=oracle, table_b=table_b,
@@ -64,11 +55,8 @@ def main():
         verbose=args.verbose,
     )
 
-    # Alphabet = all edges + PASS (P1 must signal when P2 earns an extra turn)
-    p1_inputs = list(nfa.root.children.keys()) + [PASS]
-
     lstar = MealyLStar(
-        alphabet  = p1_inputs,
+        alphabet  = nfa.p1_alphabet,
         sul       = sul,
         eq_oracle = eq,
         verbose   = args.verbose,
@@ -106,7 +94,10 @@ def evaluate_vs_random(model, nfa: DotsAndBoxesNFA,
                        n_games: int, seed: int) -> tuple[int, int, int]:
     """
     Return (losses, draws, wins) for learned P2 vs random P1.
-    PASS is fed to the model whenever P2 earns an extra turn.
+
+    The loop always begins at a P1 state (real or forced-pass).  Forced-pass
+    states are handled transparently: P1 sends PASS, model returns P2's next
+    move; P2's forced-pass states consume PASS internally.
     """
     rng = random.Random(seed)
     losses = draws = wins = 0
@@ -116,28 +107,22 @@ def evaluate_vs_random(model, nfa: DotsAndBoxesNFA,
         model.reset_to_initial()
 
         while not state.is_terminal():
-            if state.player == 'P1':
-                p1_move = rng.choice(list(state.children.keys()))
-                p2_move = model.step(p1_move)
-                state   = state.children[p1_move]
+            # --- P1's section ---
+            p1_move = PASS if state.forced_pass else rng.choice(list(state.children.keys()))
+            p2_output = model.step(p1_move)
+            state = state.children[p1_move]
 
-                if state.is_terminal():
-                    break
+            if state.is_terminal():
+                break
 
-                if state.player == 'P1':
-                    # P1 completed a box — model returned PASS, loop continues
-                    continue
-
-                if p2_move == PASS or p2_move not in state.children:
-                    p2_move = rng.choice(list(state.children.keys()))
-                state = state.children[p2_move]
-
+            # --- P2's section ---
+            if state.forced_pass:
+                # P1 completed a box; P2 is forced to pass
+                state = state.children[PASS]
+            elif p2_output == PASS or p2_output not in state.children:
+                state = state.children[rng.choice(list(state.children.keys()))]
             else:
-                # P2 earned an extra turn — feed PASS as forced P1 input
-                p2_move = model.step(PASS)
-                if p2_move == PASS or p2_move not in state.children:
-                    p2_move = rng.choice(list(state.children.keys()))
-                state = state.children[p2_move]
+                state = state.children[p2_output]
 
         w = state.winner()
         if w == 'P1':   losses += 1
@@ -165,7 +150,8 @@ def _render_board(state) -> str:
                 if c < cols:
                     v_row += '   '
             lines.append(v_row)
-    lines.append(f'({state.player} to move  P1:{state.p1_boxes}  P2:{state.p2_boxes})')
+    fp = '  FORCED PASS' if state.forced_pass else ''
+    lines.append(f'({state.player} to move{fp}  P1:{state.p1_boxes}  P2:{state.p2_boxes})')
     return '\n'.join(lines)
 
 
@@ -188,46 +174,41 @@ def play_against_model(dot_path: str, rows: int, cols: int) -> None:
     print(_render_board(state))
 
     while not state.is_terminal():
-        if state.player == 'P1':
+        # --- P1's section ---
+        if state.forced_pass:
+            print('\n  P2 completed a box — you must pass.')
+            p1_move = PASS
+        else:
             legal = list(state.children.keys())
             print(f'\nLegal moves: {legal}')
             while True:
                 try:
-                    move = int(input('Your move (edge index): '))
-                    if move in legal:
+                    p1_move = int(input('Your move (edge index): '))
+                    if p1_move in legal:
                         break
-                    print(f'  {move} is not legal.')
+                    print(f'  {p1_move} is not legal.')
                 except (ValueError, EOFError):
                     print('  Enter an integer.')
 
-            p2_response = model.step(move)
-            state = state.children[move]
-            print(); print(_render_board(state))
+        p2_response = model.step(p1_move)
+        state = state.children[p1_move]
+        print(); print(_render_board(state))
 
-            if state.is_terminal():
-                break
+        if state.is_terminal():
+            break
 
-            if state.player == 'P1':
-                print('  You completed a box — take another turn!')
-                continue
-
-            if p2_response == PASS or p2_response not in state.children:
-                p2_response = random.choice(list(state.children.keys()))
-                print(f'  P2 (fallback) plays edge {p2_response}')
-            else:
-                print(f'  P2 plays edge {p2_response}')
+        # --- P2's section ---
+        if state.forced_pass:
+            print('  You completed a box — P2 must pass, you get another turn!')
+            state = state.children[PASS]
+        elif p2_response == PASS or p2_response not in state.children:
+            p2_response = random.choice(list(state.children.keys()))
+            print(f'  P2 (fallback) plays edge {p2_response}')
             state = state.children[p2_response]
-            print(); print(_render_board(state))
-
         else:
-            p2_response = model.step(PASS)
-            if p2_response == PASS or p2_response not in state.children:
-                p2_response = random.choice(list(state.children.keys()))
-                print(f'  P2 (fallback extra turn) plays edge {p2_response}')
-            else:
-                print(f'  P2 (extra turn) plays edge {p2_response}')
+            print(f'  P2 plays edge {p2_response}')
             state = state.children[p2_response]
-            print(); print(_render_board(state))
+        print(); print(_render_board(state))
 
     winner = state.winner()
     print()
