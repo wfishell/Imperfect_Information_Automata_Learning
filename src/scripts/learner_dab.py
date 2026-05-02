@@ -15,10 +15,13 @@ from pathlib import Path
 from src.game.dots_and_boxes.game_nfa import DotsAndBoxesNFA, PASS
 from src.game.dots_and_boxes.board import _h_edge, _v_edge
 from src.game.dots_and_boxes.preference_oracle import DotsAndBoxesOracle
-from src.lstar_mcts.game_sul import GameSUL
-from src.lstar_mcts.table_b import TableB
-from src.lstar_mcts.mcts_oracle import MCTSEquivalenceOracle
-from src.lstar_mcts.custom_lstar import MealyLStar
+from src.lstar_mcts.game_sul          import GameSUL
+from src.lstar_mcts.table_b           import TableB
+from src.lstar_mcts.mcts_oracle       import MCTSEquivalenceOracle
+from src.lstar_mcts.pac_oracle        import PACEqOracle
+from src.lstar_mcts.composite_oracle  import CompositeEqOracle
+from src.lstar_mcts.counting_oracle   import CountingOracle
+from src.lstar_mcts.custom_lstar      import MealyLStar
 
 
 def main():
@@ -32,6 +35,12 @@ def main():
     parser.add_argument('--epsilon',      type=float, default=0.05)
     parser.add_argument('--oracle-depth', dest='oracle_depth', type=int,   default=None,
                         help='Minimax lookahead for oracle (default: None = full search)')
+    parser.add_argument('--pac-eps',      dest='pac_eps',      type=float, default=0.05)
+    parser.add_argument('--pac-delta',    dest='pac_delta',    type=float, default=0.05)
+    parser.add_argument('--pac-max-walk', dest='pac_max_walk', type=int,   default=40,
+                        help='Max P1 inputs per sampled NFA walk in PAC phase')
+    parser.add_argument('--no-pac',       dest='use_pac',      action='store_false',
+                        help='Disable PAC validation phase (use bare MCTS oracle)')
     parser.add_argument('--verbose',      action='store_true')
     parser.add_argument('--viz',          action='store_true',
                         help='Print enriched output: table B summary and board render')
@@ -44,16 +53,30 @@ def main():
         play_against_model(args.play, rows=args.rows, cols=args.cols)
         return
 
-    nfa     = DotsAndBoxesNFA(rows=args.rows, cols=args.cols)
-    oracle  = DotsAndBoxesOracle(nfa, depth=args.oracle_depth)
-    table_b = TableB()
-    sul     = GameSUL(nfa=nfa, oracle=oracle, table_b=table_b)
+    nfa         = DotsAndBoxesNFA(rows=args.rows, cols=args.cols)
+    inner       = DotsAndBoxesOracle(nfa, depth=args.oracle_depth)
+    oracle      = CountingOracle(inner)
+    table_b     = TableB()
+    sul         = GameSUL(nfa=nfa, oracle=oracle, table_b=table_b)
 
-    eq = MCTSEquivalenceOracle(
+    mcts = MCTSEquivalenceOracle(
         sul=sul, nfa=nfa, oracle=oracle, table_b=table_b,
         depth_N=args.depth_n, K=args.K, epsilon=args.epsilon,
         verbose=args.verbose,
     )
+
+    if args.use_pac:
+        pac = PACEqOracle(
+            alphabet       = list(nfa.p1_alphabet),
+            sul            = sul,
+            nfa            = nfa,
+            eps            = args.pac_eps,
+            delta          = args.pac_delta,
+            max_walk_depth = args.pac_max_walk,
+        )
+        eq = CompositeEqOracle(mcts, pac, verbose=args.verbose)
+    else:
+        eq = mcts
 
     lstar = MealyLStar(
         alphabet  = nfa.p1_alphabet,
@@ -63,7 +86,8 @@ def main():
     )
 
     print(f'Dots and Boxes {args.rows}x{args.cols}  '
-          f'oracle_depth={args.oracle_depth}  depth_n={args.depth_n}  K={args.K}')
+          f'oracle_depth={args.oracle_depth}  depth_n={args.depth_n}  K={args.K}  '
+          f'pac={"on" if args.use_pac else "off"}')
     print()
 
     model = lstar.run()
@@ -75,6 +99,14 @@ def main():
     print(f'  States       : {len(model.states)}')
     print(f'  Cache entries: {len(sul._cache)}')
     print(f'  Eq. queries  : {eq.num_queries}')
+    if hasattr(eq, 'mcts') and hasattr(eq, 'pac'):
+        print(f'    MCTS phase : {eq.mcts.num_queries}')
+        print(f'    PAC  phase : {eq.pac.num_queries}')
+    print()
+    print('Preference-oracle calls (during learning):')
+    print(f'  compare()        : {oracle.compare_calls}')
+    print(f'  preferred_move() : {oracle.preferred_move_calls}')
+    print(f'  total            : {oracle.total_queries}')
     print()
     print('Evaluation vs random P1 (200 games):')
     print(f'  wins={wins}  draws={draws}  losses={losses}')

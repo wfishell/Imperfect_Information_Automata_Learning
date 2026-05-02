@@ -15,6 +15,7 @@ from src.game.minimax.preference_oracle import PreferenceOracle
 from src.lstar_mcts.learner import run_lstar_mcts
 from src.lstar_mcts.game_sul import GameSUL
 from src.lstar_mcts.mcts_oracle import MCTSEquivalenceOracle
+from src.lstar_mcts.composite_oracle import CompositeEqOracle
 from src.lstar_mcts.table_b import TableB
 from src.lstar_mcts.custom_lstar import MealyMachine
 
@@ -46,9 +47,14 @@ class TestReturnContract:
         (_, sul, *_), _, _ = learning_result
         assert isinstance(sul, GameSUL)
 
-    def test_mcts_is_equivalence_oracle(self, learning_result):
-        (_, _, mcts, _), _, _ = learning_result
-        assert isinstance(mcts, MCTSEquivalenceOracle)
+    def test_eq_oracle_is_equivalence_oracle(self, learning_result):
+        # Default run_lstar_mcts(use_pac=True) returns a CompositeEqOracle
+        # wrapping an MCTSEquivalenceOracle; use_pac=False returns the bare
+        # MCTSEquivalenceOracle.
+        (_, _, eq_oracle, _), _, _ = learning_result
+        assert isinstance(eq_oracle, (MCTSEquivalenceOracle, CompositeEqOracle))
+        if isinstance(eq_oracle, CompositeEqOracle):
+            assert isinstance(eq_oracle.mcts, MCTSEquivalenceOracle)
 
     def test_table_b_is_table_b(self, learning_result):
         (_, _, _, table_b), _, _ = learning_result

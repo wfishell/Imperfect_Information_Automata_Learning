@@ -1,17 +1,22 @@
 """
-Learn P2's strategy automaton for a random minimax game via L* + MCTS.
+Learn P2's strategy automaton for a minimax game via L* + MCTS.
 
 Usage:
     python -m src.scripts.learner_minimax --depth 4
     python -m src.scripts.learner_minimax --depth 4 --seed 42 --depth-n 2 --K 200
     python -m src.scripts.learner_minimax --depth 4 --viz
+    python -m src.scripts.learner_minimax --game-file my_game.json --K 200
+
+Generate a JSON game first with:
+    python -m src.game.minimax.game_generator 4 --seed 42 --output my_game.json
 """
 
 import argparse
+import json
 import random
 from pathlib import Path
 
-from src.game.minimax.game_generator import generate_tree, GameNode
+from src.game.minimax.game_generator import generate_tree, tree_from_dict, GameNode
 from src.game.minimax.game_nfa import GameNFA
 from src.game.minimax.preference_oracle import PreferenceOracle
 from src.lstar_mcts.learner import run_lstar_mcts
@@ -21,36 +26,59 @@ def main():
     parser = argparse.ArgumentParser(
         description='Learn P2 strategy automaton for a minimax game via L* + MCTS.'
     )
-    parser.add_argument('--depth',   type=int, default=4,  help='Game tree depth')
-    parser.add_argument('--seed',    type=int, default=0,  help='RNG seed for tree generation')
+    parser.add_argument('--game-file', dest='game_file', type=str, default=None,
+                        help='Path to JSON-serialized game tree (overrides --depth/--seed)')
+    parser.add_argument('--depth',   type=int, default=4,  help='Game tree depth (ignored if --game-file is set)')
+    parser.add_argument('--seed',    type=int, default=0,  help='RNG seed for tree generation (ignored if --game-file is set)')
     parser.add_argument('--depth-n', dest='depth_n', type=int, default=None,
                         help='MCTS search depth (default: game depth)')
     parser.add_argument('--K',       type=int, default=200,
                         help='MCTS rollout budget per equivalence query')
     parser.add_argument('--epsilon', type=float, default=0.05)
+    parser.add_argument('--pac-eps',   dest='pac_eps',   type=float, default=0.05,
+                        help='PAC error tolerance (fraction of D)')
+    parser.add_argument('--pac-delta', dest='pac_delta', type=float, default=0.05,
+                        help='PAC failure probability per round')
+    parser.add_argument('--pac-max-walk', dest='pac_max_walk', type=int, default=20,
+                        help='Max P1 inputs per sampled NFA walk')
+    parser.add_argument('--no-pac', dest='use_pac', action='store_false',
+                        help='Disable PAC validation phase (use bare MCTS oracle)')
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--viz',     action='store_true',
                         help='Print enriched output: table B summary and automaton stats')
     args = parser.parse_args()
 
-    depth_n = args.depth_n if args.depth_n is not None else args.depth
+    if args.game_file:
+        with open(args.game_file) as f:
+            root = tree_from_dict(json.load(f))
+        depth = _max_depth(root)
+        source = f'file={args.game_file}'
+    else:
+        root  = generate_tree(args.depth, seed=args.seed)
+        depth = args.depth
+        source = f'depth={args.depth}  seed={args.seed}'
 
-    root      = generate_tree(args.depth, seed=args.seed)
+    depth_n = args.depth_n if args.depth_n is not None else depth
     nfa       = GameNFA(root)
     oracle    = PreferenceOracle(nfa)
     p1_inputs = list(root.children.keys())
 
-    print(f'Minimax  depth={args.depth}  seed={args.seed}  depth_n={depth_n}  K={args.K}')
+    print(f'Minimax  {source}  depth_n={depth_n}  K={args.K}  '
+          f'pac={"on" if args.use_pac else "off"}')
     print()
 
-    model, sul, mcts, table_b = run_lstar_mcts(
-        nfa       = nfa,
-        oracle    = oracle,
-        p1_inputs = p1_inputs,
-        depth_n   = depth_n,
-        K         = args.K,
-        epsilon   = args.epsilon,
-        verbose   = args.verbose,
+    model, sul, eq_oracle, table_b = run_lstar_mcts(
+        nfa          = nfa,
+        oracle       = oracle,
+        p1_inputs    = p1_inputs,
+        depth_n      = depth_n,
+        K            = args.K,
+        epsilon      = args.epsilon,
+        verbose      = args.verbose,
+        use_pac      = args.use_pac,
+        pac_eps      = args.pac_eps,
+        pac_delta    = args.pac_delta,
+        pac_max_walk = args.pac_max_walk,
     )
 
     scores = evaluate(model, root, nfa)
@@ -58,7 +86,10 @@ def main():
     print('Learned automaton:')
     print(f'  States       : {len(model.states)}')
     print(f'  Cache entries: {len(sul._cache)}')
-    print(f'  Eq. queries  : {mcts.num_queries}')
+    print(f'  Eq. queries  : {eq_oracle.num_queries}')
+    if hasattr(eq_oracle, 'mcts') and hasattr(eq_oracle, 'pac'):
+        print(f'    MCTS phase : {eq_oracle.mcts.num_queries}')
+        print(f'    PAC  phase : {eq_oracle.pac.num_queries}')
     print()
     print('Score (mean over all P1 sequences):')
     print(f'  Optimal   : {scores["optimal_mean"]:.3f}')
@@ -74,6 +105,12 @@ def main():
     out_dir.mkdir(exist_ok=True)
     model.save(str(out_dir / 'learned_strategy_minimax'))
     print(f'\nSaved: {out_dir / "learned_strategy_minimax.dot"}')
+
+
+def _max_depth(node: GameNode) -> int:
+    if node.is_terminal():
+        return 0
+    return 1 + max(_max_depth(c) for c in node.children.values())
 
 
 def evaluate(model, root: GameNode, nfa: GameNFA) -> dict:

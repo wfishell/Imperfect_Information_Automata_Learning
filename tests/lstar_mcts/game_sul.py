@@ -4,7 +4,7 @@ Unit tests for GameSUL (src/lstar_mcts/game_sul.py).
 Run Instructions:
     pytest tests/lstar_mcts/game_sul.py -v
 """
-
+#TODO ADD THE TABLE B to this 
 import pytest
 from src.lstar_mcts.game_sul import GameSUL
 from src.lstar_mcts.preference_oracle import PreferenceOracle
@@ -370,3 +370,31 @@ class TestP1Inputs:
         sul.step('A')
         assert len(sul.p1_inputs_from_trace(sul._trace))==1
 # TODO: test that p1_inputs_from_trace on single element returns that element
+
+
+# ----------------------------------------------------------------------
+# Table B integration
+# ----------------------------------------------------------------------
+class TestTableB:
+    # TODO: test that after step('A'), the preferred P2 action has visits=1 in Table B
+    #       at the trace prefix ['A']
+
+    # TODO: test that after step('A'), all alternative P2 actions at ['A'] have visits=0
+    #       in Table B (they exist as entries but were not visited)
+
+    # TODO: test that after step('A'), step('B'), Table B has entries at both
+    #       ['A'] and ['A', p2_after_a, 'B'] — one for each P2 decision point
+
+    # TODO: test that a cache hit does NOT add a new visit to Table B —
+    #       run the same P1 sequence twice, confirm visit count stays at 1
+
+    # TODO: test that after update_strategy() changes the preferred action at some
+    #       prefix, the next step() records a visit on the NEW preferred action,
+    #       not the old one
+
+    # TODO: test that the old preferred action (before override) keeps its old visit
+    #       count in Table B after update_strategy() — it is not reset to 0
+
+    # TODO: test that alternative actions (visits=0) return HIGH_PRIOR from ucb_score,
+    #       confirming they will be prioritised for MCTS exploration
+    pass
