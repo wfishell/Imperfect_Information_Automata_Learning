@@ -20,18 +20,20 @@ def main():
     parser = argparse.ArgumentParser(
         description='Learn O strategy automaton for Tic-Tac-Toe via L* + MCTS.'
     )
-    parser.add_argument('--depth-n', dest='depth_n', type=int,   default=5)
-    parser.add_argument('--K',       type=int,   default=200)
-    parser.add_argument('--verbose', action='store_true')
+    parser.add_argument('--depth-n',      dest='depth_n',      type=int,   default=5)
+    parser.add_argument('--K',            type=int,   default=200)
+    parser.add_argument('--oracle-depth', dest='oracle_depth', type=int,   default=None,
+                        help='Minimax lookahead for oracle (default: None = full search)')
+    parser.add_argument('--verbose',      action='store_true')
     parser.add_argument('--viz',     action='store_true',
                         help='Print enriched output: table B summary')
     args = parser.parse_args()
 
     nfa       = TicTacToeNFA()
-    oracle    = TicTacToeOracle(nfa)
+    oracle    = TicTacToeOracle(nfa, depth=args.oracle_depth)
     p1_inputs = list(nfa.root.children.keys())
 
-    print(f'Tic-Tac-Toe  depth_n={args.depth_n}  K={args.K}')
+    print(f'Tic-Tac-Toe  oracle_depth={args.oracle_depth}  depth_n={args.depth_n}  K={args.K}')
     print()
 
     model, sul, mcts, table_b = run_lstar_mcts(
@@ -50,8 +52,7 @@ def main():
     print(f'  Cache entries: {len(sul._cache)}')
     print(f'  Eq. queries  : {mcts.num_queries}')
     print()
-    print(f'Evaluation vs random X (500 games): losses={losses}  '
-          f'{"PASS" if losses == 0 else "FAIL — O should never lose with minimax oracle"}')
+    print(f'Evaluation vs random X (500 games): losses={losses}')
 
     if args.viz:
         print()
