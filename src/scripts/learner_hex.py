@@ -31,7 +31,6 @@ def main():
                         help='Board side length (default: 3)')
     parser.add_argument('--depth-n',      dest='depth_n',      type=int,   default=5)
     parser.add_argument('--K',            type=int,   default=200)
-    parser.add_argument('--epsilon',      type=float, default=0.05)
     parser.add_argument('--oracle-depth', dest='oracle_depth', type=int,   default=None,
                         help='Minimax lookahead for oracle (default: None = full search)')
     parser.add_argument('--verbose',      action='store_true')
@@ -60,7 +59,6 @@ def main():
         p1_inputs = list(nfa.root.children.keys()),
         depth_n   = args.depth_n,
         K         = args.K,
-        epsilon   = args.epsilon,
         verbose   = args.verbose,
     )
 

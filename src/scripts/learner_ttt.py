@@ -22,7 +22,6 @@ def main():
     )
     parser.add_argument('--depth-n', dest='depth_n', type=int,   default=5)
     parser.add_argument('--K',       type=int,   default=200)
-    parser.add_argument('--epsilon', type=float, default=0.05)
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--viz',     action='store_true',
                         help='Print enriched output: table B summary')
@@ -41,7 +40,6 @@ def main():
         p1_inputs = p1_inputs,
         depth_n   = args.depth_n,
         K         = args.K,
-        epsilon   = args.epsilon,
         verbose   = args.verbose,
     )
 

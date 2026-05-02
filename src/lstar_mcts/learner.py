@@ -36,7 +36,6 @@ def run_lstar_mcts(
     p1_inputs: list,
     depth_n: int,
     K: int             = 200,
-    epsilon: float     = 0.05,
     temperature: float = 1.0,
     verbose: bool      = False,
     use_pac:        bool  = True,
@@ -80,7 +79,6 @@ def run_lstar_mcts(
         table_b     = table_b,
         depth_N     = depth_n,
         K           = K,
-        epsilon     = epsilon,
         temperature = temperature,
         verbose     = verbose,
     )

@@ -296,7 +296,7 @@ def _run_one(game_name: str, game_cfg: dict, oracle_depth,
             table_b = TableB()
             eq = MCTSEquivalenceOracle(
                 sul=sul_override, nfa=nfa, oracle=oracle, table_b=table_b,
-                depth_N=depth_n, K=K, epsilon=0.05, verbose=False,
+                depth_N=depth_n, K=K, verbose=False,
             )
             lstar = MealyLStar(alphabet=p1_inputs, sul=sul_override,
                                eq_oracle=eq, verbose=False)
@@ -305,7 +305,7 @@ def _run_one(game_name: str, game_cfg: dict, oracle_depth,
         else:
             model, sul, mcts, table_b = run_lstar_mcts(
                 nfa=nfa, oracle=oracle, p1_inputs=p1_inputs,
-                depth_n=depth_n, K=K, epsilon=0.05, verbose=False,
+                depth_n=depth_n, K=K, verbose=False,
             )
 
         elapsed = time.perf_counter() - t0

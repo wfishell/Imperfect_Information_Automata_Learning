@@ -32,7 +32,6 @@ def main():
     parser.add_argument('--cols',         type=int,   default=2)
     parser.add_argument('--depth-n',      dest='depth_n',      type=int,   default=5)
     parser.add_argument('--K',            type=int,   default=200)
-    parser.add_argument('--epsilon',      type=float, default=0.05)
     parser.add_argument('--oracle-depth', dest='oracle_depth', type=int,   default=None,
                         help='Minimax lookahead for oracle (default: None = full search)')
     parser.add_argument('--pac-eps',      dest='pac_eps',      type=float, default=0.05)
@@ -61,7 +60,7 @@ def main():
 
     mcts = MCTSEquivalenceOracle(
         sul=sul, nfa=nfa, oracle=oracle, table_b=table_b,
-        depth_N=args.depth_n, K=args.K, epsilon=args.epsilon,
+        depth_N=args.depth_n, K=args.K,
         verbose=args.verbose,
     )
 

@@ -43,7 +43,6 @@ class MCTSEquivalenceOracle(Oracle):
         depth_N: int,
         max_trace_length: int = 20,
         K: int             = 200,
-        epsilon: float     = 0.05,
         temperature: float = 1.0,
         verbose: bool      = False,
     ) -> None:
@@ -56,7 +55,6 @@ class MCTSEquivalenceOracle(Oracle):
         self.depth_N          = depth_N
         self.max_trace_length = max_trace_length
         self.K                = K
-        self.epsilon          = epsilon
         self.temperature      = temperature
         self.verbose          = verbose
         self.hypothesis       = None  # set at the start of each find_cex call
