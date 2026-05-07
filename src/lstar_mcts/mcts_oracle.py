@@ -62,29 +62,46 @@ class MCTSEquivalenceOracle(Oracle):
 
         # {deviation_point (tuple): [trace_at_depth_N (list), ...]}
         self._deviation_leaves: dict[tuple, list[list[str]]] = {}
-    
+
+        # Once MCTS has run a full round of K rollouts WITHOUT finding
+        # a CEX, we consider preference refinement converged and stop
+        # running MCTS in subsequent rounds — letting safety / PAC
+        # handle the remaining work without MCTS interfering.
+        self._converged = False
+
     def find_cex(self, hypothesis):
         self.hypothesis = hypothesis
         self.num_queries += 1
 
+        if self._converged:
+            return None
+
         for i in range(self.K):
             subtrace, ce_traces, majority, deviation_action = self.GenerateCounterExample()
-            print(f'[rollout {i}] subtrace_len={len(subtrace)}  ce_traces={"None" if ce_traces is None else len(ce_traces)}  majority={majority if ce_traces is not None else "-"}')
+            if self.verbose:
+                print(f'[rollout {i}] subtrace_len={len(subtrace)}  '
+                      f'ce_traces={"None" if ce_traces is None else len(ce_traces)}  '
+                      f'majority={majority if ce_traces is not None else "-"}')
 
             if ce_traces is None:
                 continue
 
             if majority:
-                print('updating strategy...')
+                if self.verbose:
+                    print('updating strategy...')
                 deviation_start = len(subtrace) - 1
                 for trace in ce_traces:
                     for j in range(deviation_start, len(trace), 2):
                         self.sul.update_strategy(trace[:j], trace[j])
                 cex = self.sul.p1_inputs_from_trace(subtrace)
                 self.last_cex_p1 = cex
-                print('returning cex...')
+                if self.verbose:
+                    print('returning cex...')
                 return cex
 
+        # Full K rollouts with no CEX → preferences are converged.
+        # Skip MCTS in all future rounds.
+        self._converged = True
         return None
 
     def GenerateCounterExample(self):                                                                                                                                                                                                                                       
@@ -92,21 +109,27 @@ class MCTSEquivalenceOracle(Oracle):
 
       t0 = time.perf_counter()
       CE_Traces, deviation_action = self.CollectTraces(SubTrace)
-      print(f'  CollectTraces:          {time.perf_counter()-t0:.3f}s  traces={len(CE_Traces) if CE_Traces else None}')
+      if self.verbose:
+          print(f'  CollectTraces:          {time.perf_counter()-t0:.3f}s  '
+                f'traces={len(CE_Traces) if CE_Traces else None}')
       if CE_Traces is None:
           return SubTrace, None, False, None
 
       t0 = time.perf_counter()
       Hypothesis_Traces = self.Generate_Hypothesis_Language(SubTrace)
-      print(f'  GenerateHypothesis:     {time.perf_counter()-t0:.3f}s  traces={len(Hypothesis_Traces)}')
+      if self.verbose:
+          print(f'  GenerateHypothesis:     {time.perf_counter()-t0:.3f}s  '
+                f'traces={len(Hypothesis_Traces)}')
 
       t0 = time.perf_counter()
       values, majority = self.AssignPreferencesAndPreferenceValues(Hypothesis_Traces, CE_Traces)
-      print(f'  AssignPreferences:      {time.perf_counter()-t0:.3f}s')
+      if self.verbose:
+          print(f'  AssignPreferences:      {time.perf_counter()-t0:.3f}s')
 
       t0 = time.perf_counter()
       self.PropagateValuesThroughTableB(SubTrace, values)
-      print(f'  PropagateValues:        {time.perf_counter()-t0:.3f}s')
+      if self.verbose:
+          print(f'  PropagateValues:        {time.perf_counter()-t0:.3f}s')
 
       return SubTrace, CE_Traces, majority, deviation_action
 
@@ -255,17 +278,19 @@ class MCTSEquivalenceOracle(Oracle):
         total_count = 0
 
         for CE in Counter_Example_Traces:
-            ce_clean = [a for a in CE if a != 'Terminal']
+            ce_clean = [a for a in CE if a not in ('Terminal', None)]
             for HE in Hypothesis_Traces:
-                he_clean = [a for a in HE if a != 'Terminal']
+                he_clean = [a for a in HE if a not in ('Terminal', None)]
                 Preference = self.oracle.compare(ce_clean, he_clean)
                 smt.add(ce_clean, he_clean, Preference)
                 if Preference == 't1':
                     preferred_count += 1
                 total_count += 1
-        print('begin solve')
+        if self.verbose:
+            print('begin solve')
         values = smt.solve()
-        print('end solve')
+        if self.verbose:
+            print('end solve')
         majority = (preferred_count / total_count) > 0.5 if total_count > 0 else False
         return values, majority
 

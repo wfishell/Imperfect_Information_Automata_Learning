@@ -14,12 +14,14 @@ Generate a JSON game first with:
 import argparse
 import json
 import random
+import statistics
 from pathlib import Path
 
 from src.game.minimax.game_generator import generate_tree, tree_from_dict, GameNode
 from src.game.minimax.game_nfa import GameNFA
 from src.game.minimax.preference_oracle import PreferenceOracle
 from src.lstar_mcts.learner import run_lstar_mcts
+from src.eval.minimax import RandomP1, GreedyP1, OptimalP1
 
 
 def main():
@@ -34,7 +36,6 @@ def main():
                         help='MCTS search depth (default: game depth)')
     parser.add_argument('--K',       type=int, default=200,
                         help='MCTS rollout budget per equivalence query')
-    parser.add_argument('--epsilon', type=float, default=0.05)
     parser.add_argument('--pac-eps',   dest='pac_eps',   type=float, default=0.05,
                         help='PAC error tolerance (fraction of D)')
     parser.add_argument('--pac-delta', dest='pac_delta', type=float, default=0.05,
@@ -43,6 +44,11 @@ def main():
                         help='Max P1 inputs per sampled NFA walk')
     parser.add_argument('--no-pac', dest='use_pac', action='store_false',
                         help='Disable PAC validation phase (use bare MCTS oracle)')
+    parser.add_argument('--n-random-games', dest='n_random_games', type=int, default=100,
+                        help='Number of evaluation games vs RandomP1 (default 100)')
+    parser.add_argument('--n-other-games',  dest='n_other_games', type=int, default=30,
+                        help='Number of evaluation games vs Greedy/Optimal P1 '
+                             '(default 30 — varies tiebreak seed)')
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--viz',     action='store_true',
                         help='Print enriched output: table B summary and automaton stats')
@@ -73,7 +79,6 @@ def main():
         p1_inputs    = p1_inputs,
         depth_n      = depth_n,
         K            = args.K,
-        epsilon      = args.epsilon,
         verbose      = args.verbose,
         use_pac      = args.use_pac,
         pac_eps      = args.pac_eps,
@@ -91,11 +96,29 @@ def main():
         print(f'    MCTS phase : {eq_oracle.mcts.num_queries}')
         print(f'    PAC  phase : {eq_oracle.pac.num_queries}')
     print()
-    print('Score (mean over all P1 sequences):')
+    print('Score (mean over all P1 sequences — assumes random P1):')
     print(f'  Optimal   : {scores["optimal_mean"]:.3f}')
     print(f'  Learned   : {scores["learned_mean"]:.3f}')
     print(f'  Random    : {scores["random_mean"]:.3f}')
     print(f'  Normalised: {scores["normalised"]:.3f}  (0=random  1=optimal)')
+
+    print()
+    print(f'Evaluation: learned P2 Mealy vs each P1 strategy')
+    print(f'  (n_random={args.n_random_games}  n_greedy={args.n_other_games}  '
+          f'n_optimal={args.n_other_games})')
+
+    p1_results = evaluate_against_p1_players(
+        model, root,
+        n_random_games = args.n_random_games,
+        n_other_games  = args.n_other_games,
+    )
+
+    print(f'  {"opponent":<10}  {"mean":>8}  {"std":>8}  {"min":>6}  {"max":>6}  {"n":>4}')
+    print(f'  {"-"*10}  {"-"*8}  {"-"*8}  {"-"*6}  {"-"*6}  {"-"*4}')
+    for name in ('vs_random', 'vs_greedy', 'vs_optimal'):
+        s = p1_results[name]
+        print(f'  {name:<10}  {s["mean"]:>8.3f}  {s["std"]:>8.3f}  '
+              f'{s["min"]:>6.0f}  {s["max"]:>6.0f}  {s["n"]:>4}')
 
     if args.viz:
         print()
@@ -184,6 +207,82 @@ def evaluate(model, root: GameNode, nfa: GameNFA) -> dict:
         'random_mean':  rnd,
         'normalised':   1.0 if opt == rnd else (lrn - rnd) / (opt - rnd),
         'n_sequences':  len(p1_seqs),
+    }
+
+
+def evaluate_against_p1_players(model,
+                                  root: GameNode,
+                                  n_random_games: int = 100,
+                                  n_other_games:  int = 30) -> dict:
+    """
+    Play games with the learned P2 Mealy against each P1 strategy.
+
+    Mealy is a function of P1 input sequence; for each game we walk the
+    tree with P1 picking via its strategy and P2 emitting via Mealy.step.
+    Score = cumulative trace value (sum of node.value along the path).
+
+    Returns:
+        {
+            'vs_random':  {mean, std, min, max, n},
+            'vs_greedy':  {...},
+            'vs_optimal': {...},
+        }
+    """
+
+    def play_one(p1) -> float:
+        model.reset_to_initial()
+        node  = root
+        total = node.value
+        while not node.is_terminal():
+            assert node.player == 'P1'
+            p1_action = p1.pick(node)
+            p2_action = model.step(p1_action)
+
+            # Apply P1 action.
+            node   = node.children[p1_action]
+            total += node.value
+            if node.is_terminal():
+                break
+
+            # Apply P2 action — Mealy may emit something unexpected; fall
+            # back to first legal child rather than crashing.
+            assert node.player == 'P2'
+            if p2_action not in node.children:
+                p2_action = next(iter(node.children))
+            node   = node.children[p2_action]
+            total += node.value
+        return total
+
+    def stats(xs: list) -> dict:
+        return {
+            'mean': statistics.mean(xs),
+            'std':  statistics.stdev(xs) if len(xs) > 1 else 0.0,
+            'min':  min(xs),
+            'max':  max(xs),
+            'n':    len(xs),
+        }
+
+    # vs RandomP1: independent rng per game (vary seed).
+    random_scores = [play_one(RandomP1(seed=s)) for s in range(n_random_games)]
+
+    # vs GreedyP1: deterministic except for tiebreak; vary tiebreak seed.
+    greedy_p1     = GreedyP1(seed=0)
+    greedy_scores = []
+    for s in range(n_other_games):
+        greedy_p1.rng = random.Random(s)
+        greedy_scores.append(play_one(greedy_p1))
+
+    # vs OptimalP1: full minimax solve once at construction; vary tiebreak.
+    optimal_p1     = OptimalP1(root)
+    optimal_scores = []
+    for s in range(n_other_games):
+        optimal_p1.rng = random.Random(s)
+        optimal_scores.append(play_one(optimal_p1))
+
+    return {
+        'vs_random':  stats(random_scores),
+        'vs_greedy':  stats(greedy_scores),
+        'vs_optimal': stats(optimal_scores),
     }
 
 

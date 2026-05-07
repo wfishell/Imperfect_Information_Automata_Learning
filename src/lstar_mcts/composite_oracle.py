@@ -1,22 +1,28 @@
 """
-Two-phase equivalence oracle: MCTS strategy refinement + PAC validation.
+N-stage equivalence oracle: chains together one or more sub-oracles
+(MCTS strategy refinement, PAC validation, safety verification, ...).
 
-On every find_cex call:
-  Phase 1 (MCTS): the wrapped MCTSEquivalenceOracle runs K rollouts and
-    may return a preference-majority counterexample (mutating the SUL
-    via update_strategy in the process).
-  Phase 2 (PAC):  if MCTS returned None, the wrapped PACEqOracle samples
-    iid NFA-legal walks and tests hypothesis(x) == sul(x) directly.
+On every find_cex call, each stage runs in order:
+    stage 1 (e.g., MCTS):   may return a counterexample (often after
+                            mutating the SUL via update_strategy).
+    stage 2 (e.g., PAC):    if stage 1 returned None, samples iid walks
+                            and tests hypothesis(x) == sul(x) directly.
+    stage 3 (e.g., Safety): if previous stages returned None, runs a
+                            spec-driven model-check on the hypothesis;
+                            on violation, may patch the SUL and return
+                            the violating trace.
 
-Termination occurs when, in a single find_cex call, MCTS finds no
-strategy improvement AND PAC finds no behavioral disagreement on its
-m_k samples — joint convergence. Both phases run on every call: a PAC
-counterexample triggers L* refinement, which produces a richer
-hypothesis on which MCTS may discover further strategy improvements.
+A find_cex call returns the first non-None counterexample. If every
+stage passes, the call returns None — joint convergence.
 
-Per-round PAC guarantee on the terminating call: with probability
->= 1 - delta_pac, the final hypothesis disagrees with the final SUL on
-at most eps-fraction of D-distributed inputs.
+The class is variadic to keep the existing 2-stage usage
+(`CompositeEqOracle(mcts, pac)`) working unchanged while supporting
+arbitrarily many additional stages.
+
+Per-round PAC guarantee on the terminating call (when PAC is in the
+chain): with probability >= 1 - delta_pac, the final hypothesis
+disagrees with the final SUL on at most eps-fraction of D-distributed
+inputs.
 """
 
 from __future__ import annotations
@@ -25,31 +31,41 @@ from aalpy.base import Oracle
 
 class CompositeEqOracle(Oracle):
 
-    def __init__(self, mcts_oracle, pac_oracle, verbose: bool = False) -> None:
-        super().__init__(mcts_oracle.alphabet, mcts_oracle.sul)
-        self.mcts    = mcts_oracle
-        self.pac     = pac_oracle
+    def __init__(self, *stages, verbose: bool = False) -> None:
+        if not stages:
+            raise ValueError('CompositeEqOracle requires at least one stage')
+        first = stages[0]
+        super().__init__(first.alphabet, first.sul)
+        self.stages  = stages
         self.verbose = verbose
 
     def find_cex(self, hypothesis):
+        import time as _time
         self.num_queries += 1
 
-        if self.verbose:
-            print(f'[composite] query {self.num_queries}: phase 1 (MCTS)...')
-        cex = self.mcts.find_cex(hypothesis)
-        if cex is not None:
-            if self.verbose:
-                print(f'[composite]   MCTS returned cex (len={len(cex)})')
-            return cex
+        for i, stage in enumerate(self.stages, start=1):
+            name = stage.__class__.__name__
+            print(f'  [eq round {self.num_queries}] {name} ...',
+                  end=' ', flush=True)
+            t0 = _time.time()
+            cex = stage.find_cex(hypothesis)
+            dt = _time.time() - t0
+            if cex is not None:
+                print(f'CEX (len={len(cex)})  [{dt:.1f}s]')
+                return cex
+            print(f'no CEX  [{dt:.1f}s]')
 
-        if self.verbose:
-            print(f'[composite]   MCTS returned None; phase 2 (PAC)...')
-        cex = self.pac.find_cex(hypothesis)
-        if cex is not None:
-            if self.verbose:
-                print(f'[composite]   PAC returned cex (len={len(cex)})')
-            return cex
-
-        if self.verbose:
-            print(f'[composite]   joint convergence — both phases passed')
+        print(f'  [eq round {self.num_queries}] joint convergence — done')
         return None
+
+    # ------------------------------------------------------------------
+    # Backwards-compat aliases — old code accesses .mcts and .pac directly.
+    # ------------------------------------------------------------------
+
+    @property
+    def mcts(self):
+        return self.stages[0] if len(self.stages) >= 1 else None
+
+    @property
+    def pac(self):
+        return self.stages[1] if len(self.stages) >= 2 else None

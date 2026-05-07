@@ -22,6 +22,7 @@ from src.lstar_mcts.pac_oracle        import PACEqOracle
 from src.lstar_mcts.composite_oracle  import CompositeEqOracle
 from src.lstar_mcts.counting_oracle   import CountingOracle
 from src.lstar_mcts.custom_lstar      import MealyLStar
+from src.eval.dots_and_boxes          import RandomP1, GreedyP1, OptimalP1
 
 
 def main():
@@ -40,6 +41,11 @@ def main():
                         help='Max P1 inputs per sampled NFA walk in PAC phase')
     parser.add_argument('--no-pac',       dest='use_pac',      action='store_false',
                         help='Disable PAC validation phase (use bare MCTS oracle)')
+    parser.add_argument('--n-random-games', dest='n_random_games', type=int, default=200,
+                        help='Number of evaluation games vs RandomP1 (default 200)')
+    parser.add_argument('--n-other-games',  dest='n_other_games', type=int, default=20,
+                        help='Number of evaluation games vs Greedy/Optimal P1 '
+                             '(default 20 — Optimal is slow due to full tree solve)')
     parser.add_argument('--verbose',      action='store_true')
     parser.add_argument('--viz',          action='store_true',
                         help='Print enriched output: table B summary and board render')
@@ -107,9 +113,21 @@ def main():
     print(f'  preferred_move() : {oracle.preferred_move_calls}')
     print(f'  total            : {oracle.total_queries}')
     print()
-    print('Evaluation vs random P1 (200 games):')
+    print('Evaluation vs random P1 (200 games, sanity):')
     print(f'  wins={wins}  draws={draws}  losses={losses}')
     print(f'  win rate={wins/n:.1%}  loss rate={losses/n:.1%}')
+
+    print()
+    print(f'Evaluation: learned P2 Mealy vs each P1 strategy')
+    print(f'  (n_random={args.n_random_games}  n_greedy={args.n_other_games}  '
+          f'n_optimal={args.n_other_games})')
+
+    p1_results = evaluate_against_p1_players(
+        model, nfa, rows=args.rows, cols=args.cols,
+        n_random_games = args.n_random_games,
+        n_other_games  = args.n_other_games,
+    )
+    _print_wdl_table(p1_results)
 
     if args.viz:
         print()
@@ -247,6 +265,73 @@ def play_against_model(dot_path: str, rows: int, cols: int) -> None:
     elif winner == 'P2': print('P2 (model) wins!')
     else:                print("Draw!")
     print(f'Final — P1: {state.p1_boxes}  P2: {state.p2_boxes}')
+
+
+def evaluate_against_p1_players(model, nfa: DotsAndBoxesNFA, rows: int, cols: int,
+                                  n_random_games: int = 200,
+                                  n_other_games:  int = 20) -> dict:
+    """
+    Mealy P2 vs each P1 strategy. Returns dict opponent → (W, D, L).
+    Honours forced_pass: when state.forced_pass is True, the player to
+    move emits PASS automatically (each P1 player short-circuits to PASS
+    in that case). When P2 earns the extra turn (state.forced_pass at a
+    P2 state) we play PASS internally without consuming a Mealy step.
+    """
+
+    def play_one(p1) -> str:
+        state = nfa.root
+        model.reset_to_initial()
+        while not state.is_terminal():
+            # ---- P1's section ----
+            p1_action = PASS if state.forced_pass else p1.pick(state)
+            p2_output = model.step(p1_action)
+            state     = state.children[p1_action]
+            if state.is_terminal():
+                break
+
+            # ---- P2's section ----
+            if state.forced_pass:
+                state = state.children[PASS]
+            elif p2_output == PASS or p2_output not in state.children:
+                # Mealy emitted invalid symbol; fall back to first legal edge.
+                state = state.children[next(iter(state.children))]
+            else:
+                state = state.children[p2_output]
+        return state.winner()
+
+    def play_n(p1, n) -> tuple:
+        wins = draws = losses = 0
+        for s in range(n):
+            p1.rng = random.Random(s)
+            w = play_one(p1)
+            if   w == 'P2':  wins   += 1
+            elif w == 'P1':  losses += 1
+            else:            draws  += 1
+        return (wins, draws, losses)
+
+    # OptimalP1's full minimax solve runs at construction; pre-build once.
+    print(f'  building OptimalP1 (full minimax solve on {rows}x{cols})...')
+    optimal_p1 = OptimalP1(rows=rows, cols=cols, seed=0)
+    print(f'  OptimalP1 built (cache size: {len(optimal_p1._cache)} states)')
+
+    return {
+        'vs_random':  play_n(RandomP1(seed=0),  n_random_games),
+        'vs_greedy':  play_n(GreedyP1(seed=0),  n_other_games),
+        'vs_optimal': play_n(optimal_p1,        n_other_games),
+    }
+
+
+def _print_wdl_table(results: dict) -> None:
+    print(f'  {"opponent":<10}  {"wins":>5}  {"draws":>5}  {"losses":>6}  '
+          f'{"win%":>6}  {"loss%":>6}  {"n":>4}')
+    print(f'  {"-"*10}  {"-"*5}  {"-"*5}  {"-"*6}  {"-"*6}  {"-"*6}  {"-"*4}')
+    for name in ('vs_random', 'vs_greedy', 'vs_optimal'):
+        w, d, l = results[name]
+        n = w + d + l
+        win_pct  = w / n if n else 0.0
+        loss_pct = l / n if n else 0.0
+        print(f'  {name:<10}  {w:>5}  {d:>5}  {l:>6}  '
+              f'{win_pct:>5.1%}  {loss_pct:>5.1%}  {n:>4}')
 
 
 if __name__ == '__main__':
