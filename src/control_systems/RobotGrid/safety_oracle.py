@@ -5,11 +5,11 @@ Safety stage for the gas-grid robot, structured as three independent layers:
                            For G(gas > 0): `lambda s: s.gas <= 0`.
                            This is the ONLY domain-specific input.
 
-    2. SPEC CHECKER        `SafetyChecker.find_all_violations(mealy)` does
-                           a reachability BFS over (Mealy ⊗ env). Returns
-                           every reachable env state where `is_bad` holds,
-                           with the trace that led there. Pure reachability
-                           — no arithmetic, no heuristics.
+    2. SPEC CHECKER        `SpotSafetyChecker.find_all_violations(mealy)` uses
+                           Spot to model-check an LTL formula against the
+                           product (Mealy ⊗ env) Kripke structure. Spot
+                           answers YES/NO; a targeted BFS extracts the
+                           counterexample trace when a violation is found.
 
     3. STRATEGY SYNTHESIS  `solve_safety_game(nfa, is_bad)` runs a backward
                            fixpoint over the env's reachable abstract state
@@ -29,8 +29,18 @@ Safety stage for the gas-grid robot, structured as three independent layers:
 """
 
 from __future__ import annotations
+import sys
 from typing import Callable
 from aalpy.base import Oracle
+
+# ---------------------------------------------------------------------------
+# Spot Python bindings — installed via Homebrew.
+# ---------------------------------------------------------------------------
+_SPOT_PATH = '/opt/homebrew/Cellar/spot/2.14.1/lib/python3.13/site-packages'
+if _SPOT_PATH not in sys.path:
+    sys.path.insert(0, _SPOT_PATH)
+import spot
+import buddy
 
 from src.control_systems.RobotGrid.board    import (
     RobotGridState,
@@ -213,25 +223,147 @@ def solve_safety_game(
 
 
 # ----------------------------------------------------------------------
-# Spec checker — reachability of `is_bad` over (Mealy ⊗ env).
+# Spot-based spec checker.
+#
+# Architecture (Option B):
+#   1. Build the product (Mealy ⊗ env) as a Spot kripke_graph, labelling
+#      each state with the atomic proposition `gas_positive`.
+#   2. Ask Spot: does the product satisfy the LTL formula G(gas_positive)?
+#      Spot answers YES/NO via intersecting_run(BA_of_negation).
+#   3. If a violation exists, run a targeted BFS to extract the shortest
+#      interleaved counterexample trace — the format the rest of
+#      SafetyEqOracle expects.
+#
+# The backward fixpoint (solve_safety_game) and all patching logic are
+# unchanged; this class is a drop-in replacement for the old SafetyChecker.
 # ----------------------------------------------------------------------
 
-class SafetyChecker:
-    """Reachability check over the product of the Mealy hypothesis and
-    the env. Returns input traces that reach a state satisfying `is_bad`."""
+class SpotSafetyChecker:
+    """Model-check G(gas_positive) using Spot; extract CEX via BFS."""
+
+    LTL_FORMULA = 'G(gas_positive)'
 
     def __init__(self,
                  nfa:    RobotGridNFA,
                  is_bad: Callable[[RobotGridState], bool] = gas_positive_spec) -> None:
         self.nfa    = nfa
         self.is_bad = is_bad
+        # Translate the negated formula once — reused on every call.
+        neg       = spot.formula(f'!({self.LTL_FORMULA})')
+        self._ba  = neg.translate('BA', 'deterministic')
+
+    # ------------------------------------------------------------------
+    # Public API (same as the old SafetyChecker)
+    # ------------------------------------------------------------------
 
     def find_violation(self, mealy) -> list | None:
-        all_violations = self.find_all_violations(mealy, max_violations=1)
-        return all_violations[0] if all_violations else None
+        v = self.find_all_violations(mealy, max_violations=1)
+        return v[0] if v else None
 
-    def find_all_violations(self, mealy, max_violations: int | None = None
-                              ) -> list[list]:
+    def find_all_violations(self, mealy,
+                             max_violations: int | None = None) -> list[list]:
+        # Phase 1: build the Kripke structure and ask Spot.
+        kripke = self._build_kripke(mealy)
+        run    = kripke.intersecting_run(self._ba)
+        if run is None:
+            return []   # property holds — no violation
+
+        # Phase 2: violation confirmed; extract traces via BFS.
+        return self._bfs_extract(mealy, max_violations)
+
+    # ------------------------------------------------------------------
+    # Phase 1 — Kripke graph construction
+    # ------------------------------------------------------------------
+
+    def _build_kripke(self, mealy) -> 'spot.kripke_graph':
+        """BFS over (mealy_state × abstract_env_key); label each state
+        with gas_positive.  The kripke_graph shares its bdd_dict with
+        self._ba so that intersecting_run() works without dict mismatch.
+
+        Two-set BFS:
+          visited   — keys whose kripke state number has been allocated
+          processed — keys whose children have been enqueued and edges added
+        A state is pre-allocated (visited) when first discovered as a child;
+        its children are only processed once it is popped (processed check).
+        This avoids the orphan-placeholder bug (edges pointing to states that
+        were never connected) while still preventing duplicate allocations.
+        """
+        k      = spot.make_kripke_graph(self._ba.get_dict())
+        gas_ap = k.register_ap('gas_positive')
+        ith    = buddy.bdd_ithvar(gas_ap)   # gas_positive = True
+        nth    = buddy.bdd_nithvar(gas_ap)  # gas_positive = False
+
+        visited:   dict[tuple, int] = {}  # key → kripke state number
+        processed: set[tuple]       = set()  # keys whose children are done
+
+        mealy.reset_to_initial()
+
+        # Pre-allocate the initial state so k_num == 0 and set_init_state works.
+        root_key  = (id(mealy.current_state), safety_state_key(self.nfa.root))
+        root_cond = nth if self.is_bad(self.nfa.root) else ith
+        visited[root_key] = k.new_state(root_cond)   # → 0
+        k.set_init_state(0)
+
+        queue = [(mealy.current_state, self.nfa.root)]
+
+        while queue:
+            m_state, env = queue.pop(0)
+            key = (id(m_state), safety_state_key(env))
+
+            if key in processed:
+                continue
+            processed.add(key)
+
+            k_num = visited[key]   # always pre-allocated before queuing
+
+            if env.is_terminal():
+                # Self-loop so the Büchi product has an accepting cycle here.
+                k.new_edge(k_num, k_num)
+                continue
+            if env.player != 'P1':
+                continue
+
+            for p1_input, env_after_p1 in env.children.items():
+                # Look up Mealy output without mutating current_state.
+                trans = m_state.transitions.get(p1_input)
+                if trans is None:
+                    p2_out = (next(iter(env_after_p1.children))
+                              if not env_after_p1.is_terminal() and env_after_p1.children
+                              else None)
+                    next_m = m_state
+                else:
+                    p2_out, next_m = trans
+
+                if env_after_p1.is_terminal():
+                    key2 = (id(next_m), safety_state_key(env_after_p1))
+                    if key2 not in visited:
+                        cond2        = nth if self.is_bad(env_after_p1) else ith
+                        visited[key2] = k.new_state(cond2)
+                    k.new_edge(k_num, visited[key2])
+                    continue
+
+                if p2_out not in env_after_p1.children:
+                    p2_out = next(iter(env_after_p1.children))
+
+                env_next = env_after_p1.children[p2_out]
+                key2     = (id(next_m), safety_state_key(env_next))
+                if key2 not in visited:
+                    cond2        = nth if self.is_bad(env_next) else ith
+                    visited[key2] = k.new_state(cond2)
+                    queue.append((next_m, env_next))
+                k.new_edge(k_num, visited[key2])
+
+        return k
+
+    # ------------------------------------------------------------------
+    # Phase 2 — BFS trace extraction (runs only when Spot finds a hit)
+    # ------------------------------------------------------------------
+
+    def _bfs_extract(self, mealy,
+                     max_violations: int | None) -> list[list]:
+        """Shortest-first BFS over the interleaved trace space.  Only
+        executes after Spot has confirmed a violation exists, so it
+        terminates quickly (the bad state is reachable by definition)."""
         violations: list[list] = []
         visited:    set        = set()
         frontier:   list[list] = [[]]
@@ -242,7 +374,6 @@ class SafetyChecker:
             if env is None:
                 continue
 
-            # Spec violation — the predicate fired on the previous step.
             if self.is_bad(env):
                 violations.append(trace)
                 if max_violations is not None and len(violations) >= max_violations:
@@ -252,9 +383,8 @@ class SafetyChecker:
             if env.is_terminal():
                 continue
 
-            # Dedupe by (mealy_state_id, env_state_key).
-            m_state, _ = self._replay(mealy, trace)
-            key = (id(m_state), self._env_key(env))
+            m_state = self._replay(mealy, trace)
+            key     = (id(m_state), self._env_key(env))
             if key in visited:
                 continue
             visited.add(key)
@@ -262,9 +392,9 @@ class SafetyChecker:
             if env.player != 'P1':
                 continue
 
-            for p1_input in env.children:
-                _, p2_output = self._replay(mealy, trace + [p1_input])
-                env_after_p1 = env.children[p1_input]
+            for p1_input, env_after_p1 in env.children.items():
+                p2_output = m_state.transitions.get(p1_input)
+                p2_out    = p2_output[0] if p2_output else None
 
                 if env_after_p1.is_terminal():
                     if self.is_bad(env_after_p1):
@@ -274,13 +404,10 @@ class SafetyChecker:
                             return violations
                     continue
 
-                # Fallback to first legal action when Mealy's emission is
-                # illegal at this state — matches deployment behaviour.
-                if p2_output not in env_after_p1.children:
-                    p2_output = next(iter(env_after_p1.children))
+                if p2_out not in env_after_p1.children:
+                    p2_out = next(iter(env_after_p1.children))
 
-                env_after_p2 = env_after_p1.children[p2_output]
-                frontier.append(trace + [p1_input, p2_output])
+                frontier.append(trace + [p1_input, p2_out])
 
         return violations
 
@@ -290,12 +417,13 @@ class SafetyChecker:
                 env.delivered_count, env.player, env.step_count)
 
     @staticmethod
-    def _replay(mealy, trace: list) -> tuple:
+    def _replay(mealy, trace: list):
+        """Return the Mealy state after replaying trace (P1 inputs only
+        at even indices of the interleaved trace)."""
         mealy.reset_to_initial()
-        out = None
         for sym in trace:
-            out = mealy.step(sym)
-        return mealy.current_state, out
+            mealy.step(sym)
+        return mealy.current_state
 
 
 # ----------------------------------------------------------------------
@@ -444,7 +572,7 @@ class SafetyEqOracle(Oracle):
         self.is_bad  = is_bad
         self.max_violations_per_round = max_violations_per_round
 
-        self.checker = SafetyChecker(nfa, is_bad=is_bad)
+        self.checker = SpotSafetyChecker(nfa, is_bad=is_bad)
 
         # Always use deterministic manhattan inside the safety stage —
         # the oracle's _naive_action has rng tiebreaks, which would
@@ -524,7 +652,7 @@ class SafetyEqOracle(Oracle):
                 return None
 
             cex_full          = violations[0]
-            cex_short, _tail  = self._trim_to_first_boundary(cex_full)
+            cex_short, _  = self._trim_to_first_boundary(cex_full)
             self._returned_cexes.add(tuple(cex_short))
             print(f'      ↳ safety [SWEEP]: '
                   f'{n_patches} state-keyed patch(es) installed in batch.  '

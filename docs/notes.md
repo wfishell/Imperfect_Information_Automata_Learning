@@ -11,3 +11,9 @@ We want to expand this to games where we can have a suboptimal preference oracle
 
 I want to think of a few games that are more intersting. The big issue is how we encode the input space for the enviornment. If the input space is large, the states explode and MCTS explores too much and we never converge. We see this in dots and boxes on a 4 by 4 grid. The question then is, are there more intersting RL games like Atari Games that we can figure out a clever encoding for to prevent state explosion with safety conditions that show our automata learning can learn a controller for? We really just need a input space that will not blow up. See dots and boxes for example. But I think less grid based games could work with a clever encoding. 
 
+
+# Idea: Frogger
+
+
+
+
